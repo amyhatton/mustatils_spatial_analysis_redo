@@ -1,0 +1,480 @@
+---
+title: "Percolation Analysis COH"
+author: "Amy Hatton"
+date: "13/09/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+#percolation not working so trying db scan
+```{r}
+install.packages("dbscan")
+library(dbscan)
+
+
+```
+
+```{r}
+mustatils <- st_read("data/mustatils_for_paper_final.gpkg")
+p <- st_transform(mustatils, crs=32637)
+p$centroids <- st_centroid(p) %>% 
+  st_geometry()
+plot(st_geometry(p))
+plot(st_set_geometry(p, 'centroids')[, 0], add = T, col = 'red', pch = 19)
+c <- st_set_geometry(p, 'centroids')
+
+p_xy <- st_coordinates(c)
+```
+Run dbscan analysis,
+
+choose MinPts= 4 (Ester et al. 1996)
+epsilon = use k nearest neighbors (where k = minPts) optimum value is at point of maximum curvature
+```{r}
+kNNdistplot(p_xy, 2)
+
+#seems to be most curvature at 25000m but that seems too big
+mustatils_dbscan <- dbscan::dbscan(p_xy, eps = 5000, minPts = 4)
+plot(p_xy, col = mustatils_dbscan$cluster)
+library(dplyr)
+mustatils <- mustatils %>% 
+  mutate(dbcluster = mustatils_dbscan$cluster)
+```
+Create a polygon around the clusters for viewpoints analysis
+```{r}
+# First we create an empty list to store the resulting convex hull geometries Set
+# the length of this list to the total number of clusters found
+geometry_list <- vector(mode = "list", length = max(mustatils$dbcluster))
+
+# Create a counter, starting it at 0, our first cluster index
+counter <- 0
+
+# Begin for loop, iterating across each clusters, cluster_index starts at 0, goes
+# to 101 (our total number of clusters)
+sf_use_s2(FALSE)
+for (cluster_index in seq(0, max(mustatils$dbcluster))) {
+
+    # filter our entire mustatils sdf by the cluster index returns only points
+    # for *that* cluster
+    mustatil_cluster_subset <- filter(mustatils, dbcluster == cluster_index)
+
+    # for these points, first union them, then calculate the convex hull
+    cluster_polygon <- mustatil_cluster_subset %>%
+        st_union %>%
+        st_convex_hull()
+
+    # at this point, you could export this single cluster polygon into a single
+    # dataset if you wanted - but we'd prefer not to have 101 shapefiles to then
+    # union!  instead, we'll add the geometry of the polygon into our list.  store
+    # these geometry of this polygon into its position within the list
+    geometry_list[counter] <- (cluster_polygon)
+
+    # add one to the counter, to move to the next cluster and the next position
+    # within the list
+    counter <- counter + 1
+}
+
+# Set our geometry list to a multi-polygon
+mustatil_clusters <- st_transform(st_sfc(geometry_list, crs=4326), crs = 32637)
+
+st_write(mustatil_clusters, "data/projected_utm37n/mustatil_clusters.gpkg", overwrite=TRUE)
+```
+
+## Percolation analysis to check for clustering
+Following Schmidt and Maddison 2020
+
+``` {r}
+# install.packages("devtools")
+#library(devtools)
+#devtools::install_github("SCSchmidt/percopackage")
+library(percopackage)
+library(sf)
+```
+
+Need to convert data to format |index|eastings|Northing
+```{r}
+mustatils <- st_read("data/mustatils_for_paper_final.gpkg")
+p <- st_transform(mustatils, crs=32637)
+p$centroids <- st_centroid(p) %>% 
+  st_geometry()
+plot(st_geometry(p))
+plot(st_set_geometry(p, 'centroids')[, 0], add = T, col = 'red', pch = 19)
+c <- st_set_geometry(p, 'centroids')
+
+
+p_xy <- st_coordinates(c)
+#st_geometry(c) <- NULL
+perc_sites<- as.data.frame(cbind(c$id, p_xy))
+names(perc_sites) <- c("PlcIndex", "Easting", "Northing")
+```
+
+Run the percolation analysis
+```{r}
+percolate(perc_sites, upper_radius=20, lower_radius=300, step_value=-50, limit=1000, radius_unit=1)
+```
+Need to do it manually because i can't install the package
+```{r}
+percolate <- function(data, distance_table = NULL, upper_radius, lower_radius, step_value, limit, radius_unit) {
+
+# create directories
+# file.path creates paths according to working directory used on user's computer
+    
+path_working <- file.path(getwd(), "working_data")
+path_results <- file.path(getwd(), "analysis_results")
+
+dir.create(path_working, showWarnings = FALSE)
+dir.create(path_results, showWarnings = FALSE)
+
+# this will save the input values in a csv and as w_data in the working environment 
+w_data_colnames <- c("limit", "radius_unit", "upper_radius", "lower_radius", "step_value")
+w_data_values <- c(limit, radius_unit, upper_radius, lower_radius, step_value)
+w_data <- rbind(w_data_colnames,w_data_values)
+
+file_name <- paste(file.path(path_working,"working_data.csv"))
+write.table(w_data, file_name, row.names=FALSE, col.names = FALSE, sep = ",")
+
+# NOTE: The coordinate data is still required, even if distance table is provided!
+# Generate this in the data.csv file, for the mapping program
+file_name <-paste(file.path(path_working,"data.csv"))
+write.table(data, file_name, row.names=FALSE, col.names = TRUE, sep = ",")
+
+ptm <- proc.time()
+# This displays computation time, for information
+
+# List any entries with null values and write to file
+data_NA <- data[rowSums(is.na(data)) > 0,]
+print(paste("Entries in source file with one or more null values: "))
+data_NA
+file_name <- paste(file.path(path_working,"null_entries.txt"))
+write.table(data_NA, file_name, row.names=FALSE)
+# Remove rows with null values from data
+data <- na.omit(data)
+
+# conditional depending on what kind of data type you are entering
+# if the internode distance table needs to be created, compute and store it
+if (is.null(distance_table)) {
+	print("Computing inter-node distance table")
+	# No distance table provided, so compute the distance table
+  
+	# Remove points that are superimposed and keep only the first ID
+	# - This removes one of two sites that are very close to each other
+	# Determined on basis of x y coordinates
+	# Write list to file
+	duplicate_xy <- data[duplicated(data[,2:3]),]
+	data_unique <- data[!duplicated(data[,2:3]),]
+	print(paste("Number of removed superimposed points: ",(nrow(data)-nrow(data_unique))))
+	duplicate_xy
+	file_name <- paste(file.path(path_working,"duplicate_entries.txt"))
+	write.table(duplicate_xy, file_name, row.names=FALSE)
+
+	x_vec <- data_unique$Easting
+	y_vec <- data_unique$Northing
+	ID <- data_unique$PlcIndex
+
+	# Write file with list of PlcIndex values used
+	PlcIndex_list <- matrix(ID,ncol=1)
+	file_name <- paste(file.path(path_working,"PlcIndex.csv"))
+	write.table(data_unique$PlcIndex, file_name, row.names=FALSE, col.names="PlcIndex")
+
+	# Number of points/nodes in file with no duplicates
+	n <- length(ID)
+	print(paste('number of points: ',n))
+
+	# Create matrix of internodal distances
+	# Columns: NodeId1, NodeId2, distance 1-2
+	col_list <- cbind('ID1','ID2','d12')
+	ni <- n-1
+	nj <- n
+	n_rows <- n*(n-1)/2
+	nodes_list <- matrix(,nrow = n_rows, ncol = 3)
+	colnames(nodes_list) <- col_list
+
+	# compute the internode distance table
+	row <- 0
+	i <- 1
+	for (i in 1:ni)
+	{
+		j1 <- i+1
+		for (j in j1:nj)
+		{
+			# Compute distance between nodes - using Pythagoras
+			#  this is in units of 1m
+			d <- sqrt((abs(x_vec[i]-x_vec[j]))^2+(abs(y_vec[i]-y_vec[j]))^2)
+			# to give distance in m*unit, rounded to 2 decimal places; this also reduces file size
+			d <- d/radius_unit # this factors the values by the unit. 1 gives metres, 1000 gives km
+			d <- round(d,2)
+			# Record this value only if less than limit of distances to be included in the internode distance table
+			if(d < limit)
+				{row <- row+1
+				nodes_list[row,] <- cbind(ID[i],ID[j],as.numeric(d))
+			}
+		}
+	}
+	# give processing time, for information
+	t1 <- proc.time() - ptm
+	print('loop computed')
+	
+	# Output file name and location of internode distance table to a text file
+	file_name <- paste(file.path(path_working,"nodes_list_d.txt"))
+	# Remove the unused rows in the matrix
+	nodes_list <- nodes_list[-(row+1:n_rows),]
+	m_nodes <- as.matrix(nodes_list)
+	# need to write this WITHOUT the row number
+	write.table(m_nodes, file_name, row.names=FALSE)
+
+	t2 <- proc.time() - ptm
+	print('matrix copied')
+	
+	}
+	else {
+	  # Distance table is provided, no need to compute it
+	  # However the unique IDs are still needed, for mapping
+	  print("distance table given, not computed")
+	  data_unique <- data.frame(stack(data[,1:2]))
+	  data_unique <- unique(data_unique$values)
+	  data_unique <- as.data.frame(data_unique)
+	  colnames(data_unique) <- "PlcIndex"
+	  
+	  # Write file with list of PlcIndex values used
+	  file_name <- paste(file.path(path_working,"PlcIndex.csv"))
+	  write.table(data_unique$PlcIndex, file_name, row.names=FALSE, col.names="PlcIndex")
+
+	  # Save distance_table as nodes_list_d.text so it corresponds to the work flow
+	  file_name <- paste(file.path(path_working,"nodes_list_d.txt"))
+	  write.table(distance_table, file_name, row.names=FALSE)
+	  
+}
+
+## original clustering script
+
+mem_clust_by_r <- as.data.frame(data_unique$PlcIndex)
+names(mem_clust_by_r)[1] <- "PlcIndex"
+
+# conditional depending on the input unit value
+
+if (radius_unit == 1)
+{unit_text <- "m"
+} else if (radius_unit == 1000)
+{unit_text <- "km"
+} else {
+  unit_text <- paste(radius_unit, "m", sep="")}
+
+print(paste("Radii used for cluster analysis, ",unit_text,": upper ",upper_radius,
+            "; lower ",lower_radius,"; step ", step_value))
+
+# To compute and display computational time
+ptm <- proc.time()
+
+data_file <- paste(file.path(path_working,"nodes_list_d.txt"))
+
+# The data table of nodes and internode distances is a Text file, with headers
+matrix_IDs_distance <- read.table(data_file,header=TRUE)
+# Columns are: node ID1, node ID2, d12 is distance between them. Note that this is generated or 
+#  has to be specified beforehand
+# If generated, it is with a limit to the maximum distance to reduce overall matrix size, and hence
+# creates a partial matrix
+
+# processing time for information
+t <- as.vector(proc.time() - ptm)[3]
+print(paste('time to get matrix in mins',t/60))
+ptm2 <- proc.time()[3]
+
+# Define range of percolation radius and step value to progressively reduce it
+# Radius in defined unit value, as per radius_unit in radius_values.txt
+radius_values <- seq(upper_radius,lower_radius,by=-step_value)
+
+# To accomodate non-integer radius values
+radii_count <- length(radius_values)
+loop_count <- seq(radii_count,1,by=-1)
+
+# Repeat cluster computation for each radius value
+
+for (i in loop_count)
+{
+  radius <- radius_values[i]
+  # Create sub-matrix such that all internode distances d12<=radius
+  matrix_radius <- matrix_IDs_distance[matrix_IDs_distance[,3]<=radius,]
+  # Create graph (note that characters and numerics are treated differently)
+  matrix2 <- matrix_radius[,1:2]
+  matrix2[,1] <- as.character(matrix2[,1])
+  matrix2[,2] <- as.character(matrix2[,2])
+  # This creates a graph from the sub-matrix matrix2
+  # Directed means that the edges will only be 'counted' once
+  # In order to interpret matrix2 as a matrix added 'as.matrix'
+  g <- graph.edgelist(as.matrix(matrix2), directed=TRUE)
+  
+  # take subcomponents - description of how this works
+  # http://stackoverflow.com/questions/20725411/finding-strong-and-weak-clusters-and-their-membership-in-r
+  
+  # Identifies clusters in the graph; creates list of nodes and associated cluster id
+  # - weak refers to the mechanism used to generate the clusters and relates to compuational efficiency
+  # Note that this does not include clusters of 1 node, so the counts are not meaningful at the lower limit
+  member_of_cluster_id <- clusters(g, mode="weak")$membership
+  # V labels vertices of the graph
+  m <- cbind(V(g)$name,member_of_cluster_id)
+  # add the values of the cluster identity for each node to mem_clust_by_r 
+  new_col_name <- paste("ClstRad",radius,sep="")
+  colnames(m) <- c("PlcIndex",new_col_name)
+  mem_clust_by_r <-  merge(mem_clust_by_r, m, by="PlcIndex", all.x=TRUE)
+  
+  ptm1 <- proc.time()[3]
+  t_print <-  as.vector(ptm1-ptm2)/60
+  print(paste("for radius=",radius,"it took to compute",sprintf("%4.2f",t_print),"mins"))
+  
+}
+# write the cluster identity file as a csv
+file_name <- paste(file.path(path_results,"member_cluster_by_radius.csv"))
+# Write file without row names
+write.csv(mem_clust_by_r,file_name,quote=FALSE,row.names=FALSE)
+
+### original cluster frequency script
+
+## Generate analysis value data for cluster frequency plotting
+
+# Read source file to establish number of nodes (entries in the file)
+# subtract 1 for header line
+total_nodes <- nrow(data) -1
+
+# Create matrix of number of clusters and number of nodes (max, mean, median), for each radius
+# Columns:  Radius, number of clusters, max cluster size, mean cluster size, median cluster size
+col_list <- cbind('radius','num_clust','max_clust_size','max_normalized','mean_clust_size','median_clust_size')
+n_cols <- length(col_list)
+
+n_rows <- length(radius_values)
+analysis_by_radius <- matrix(, nrow = n_rows, ncol = n_cols)
+colnames(analysis_by_radius) <- col_list
+row <- 1
+
+for(i in loop_count)
+{
+  radius <- radius_values[i]
+  # Reads in data for each percolation radius that has been computed, and if appropriate by minimum cluster size
+  # This lists each node and the id of the cluster to which it is a member, for this radius
+  ClstRad_col <- paste("ClstRad",radius,sep="")
+  member_cluster <- mem_clust_by_r[c("PlcIndex", ClstRad_col)]
+  names(member_cluster) <- c('node','cluster')
+  member_cluster <- na.omit(member_cluster)
+  
+  # number of nodes in clusters, i.e. excluding single nodes
+  total_clustered_nodes <- nrow(member_cluster)
+  # Ranks clusters by size, i.e. number of nodes for each cluster
+  frequency_clusters <- data.frame(table(member_cluster$cluster))
+  names(frequency_clusters) <- c('cluster','number_of_nodes')
+  ranked_clusters <- frequency_clusters[order(frequency_clusters$number_of_nodes, decreasing=TRUE),]
+  # Convert cluster column from factor to numeric, else problems later
+  ranked_clusters$cluster <- as.numeric(as.character(ranked_clusters$cluster))
+  number_of_clusters <- nrow(ranked_clusters)
+  
+  # The number of nodes in the first ranked cluster is maximum
+  max_nodes <- ranked_clusters$number_of_nodes[1]
+  max_normalized <- max_nodes/total_nodes
+  mean_nodes <- mean(ranked_clusters$number_of_nodes)
+  median_nodes <- median(ranked_clusters$number_of_nodes)
+  
+  analysis_by_radius[row,] <- cbind(radius,number_of_clusters,max_nodes,max_normalized,mean_nodes,median_nodes)
+  row <- row + 1
+  
+}
+
+analysis_by_radius <<- as.data.frame(analysis_by_radius)
+analysis_by_radius
+# Save the analysis data as a csv file
+
+file_name <- paste(file.path(path_results,"analysis_by_radius.csv"))
+write.table(analysis_by_radius,file=file_name,col.names=TRUE,sep=",",row.names=FALSE,quote=FALSE)
+
+}
+```
+
+Map the clusters
+
+```{r}
+coh_utm <- st_transform(coh_poly, crs=32735)
+coh_utm <- as(coh_utm, "Spatial")
+mapClusters(coh_utm, "Cradle of Humankind Clusters", "coh_sites")
+
+
+```
+
+Percolation cluster Analytics
+```{r}
+plotClustFreq("coh_sites")
+perc <- ggplot(analysis_by_radius, aes(x= radius, y = max_normalized))+
+  geom_point(shape = 1, size = 1.5)+
+  geom_line()+
+  xlab("radius (km)")+
+  ylab("max size (normalised)")+
+  theme_bw()+
+  theme(panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        axis.title = element_text(size = 12))
+```
+
+Make maps to overlap on percolation analysis plot
+```{r}
+clusters_coh <- st_read("maps/coh_sites.shp")
+
+clusters_coh_f <- clusters_coh %>% 
+  mutate_if(sapply(clusters_coh, is.numeric), as.factor)
+
+
+p_1 <- tm_shape(mustatil_clusters)+
+ tm_borders()+
+tm_shape(mustatils)+
+  tm_dots()
+
+
+p_1.4 <- tm_shape(coh_poly)+
+ tm_borders()+
+tm_shape(clusters_coh_f)+
+  tm_dots(col ="RnkR1_4", size = 0.3, palette = "viridis")+
+tm_layout(frame = FALSE, legend.show = FALSE,
+          bg.color = "transparent",
+          title = "r=1.4km")
+
+p_4.6 <- tm_shape(coh_poly)+
+ tm_borders()+
+tm_shape(clusters_coh_f)+
+  tm_dots(col ="RnkR4_6", size = 0.3, palette = "viridis")+
+tm_layout(frame = FALSE, legend.show = FALSE,
+          bg.color = "transparent",
+          title = "r=4.6km")
+
+p_7.7 <- tm_shape(coh_poly)+
+ tm_borders()+
+tm_shape(clusters_coh_f)+
+  tm_dots(col ="RnkR7_7", size = 0.3, palette = "viridis")+
+tm_layout(frame = FALSE, legend.show = FALSE,
+          bg.color = "transparent",
+          title = "r=7.7km")
+
+p_8.3 <- tm_shape(coh_poly)+
+ tm_borders()+
+tm_shape(clusters_coh_f)+
+  tm_dots(col ="RnkR8_3", size = 0.3, palette = "viridis")+
+tm_layout(frame = FALSE, legend.show = FALSE,
+          bg.color = "transparent",
+          title = "r=8.3km")
+
+```
+
+Combine into 1 plot using viewports
+```{r}
+#use viewport to make 1 plot
+library(grid)
+```
+
+
+```{r}
+#pdf("figs/coh_chp/percolation_clusters.pdf", height = 6, width = 8 )
+png("figs/coh_chp/percolation_clusters.png", height = 600, width = 700, res = 100)
+perc
+v1 <- print(p_1, vp = viewport(0.25, 0.25, width = 0.2, height = 0.3))
+v2 <- print(p_1.4, vp = viewport(0.2, 0.6, width = 0.2, height = 0.3))
+v3 <- print(p_4.6, vp = viewport(0.5, 0.4, width = 0.2, height = 0.3))
+v4 <- print(p_7.7, vp = viewport(0.4, 0.8, width = 0.2, height = 0.3))
+v5 <- print(p_8.3, vp = viewport(0.8, 0.7, width = 0.2, height = 0.3))
+
+dev.off()
+```

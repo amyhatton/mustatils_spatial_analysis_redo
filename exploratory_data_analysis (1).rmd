@@ -1,0 +1,180 @@
+---
+title: "exploratory analysis"
+author: "Amy Hatton"
+date: '2022-07-19'
+output: html_document
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(raster)
+library(sf)
+library(maptools)
+library(rgdal)
+library(terra)
+```
+
+import data
+```{r}
+mustatils <- st_read("data/projected_utm37n/mustatils_with_size_metrics.gpkg")
+study_area <- st_read("data/projected_utm37n/study_area_straightened.gpkg")
+slope <- raster("data/projected_utm37n/slope.tif")
+aspect <- raster("data/projected_utm37n/aspect.tif")
+tpi <- raster("data/projected_utm37n/tpi.tif")
+tri <- raster("data/projected_utm37n/tri.tif")
+dem <- raster("data/cleaned_data/rast/dem.tif")
+dist_lakes <- raster("data/cleaned_data/rast/dist_lakes.tif")
+dist_rivers <- raster("data/cleaned_data/rast/dist_rivers.tif")
+dist_deposits <- raster("data/cleaned_data/rast/dist_deposits.tif")
+dist_lakes_rivers <- raster("data/cleaned_data/rast/dist_lakes_rivers.tif")
+dist_deposits_rivers <- raster("data/cleaned_data/rast/dist_deposits_rivers.tif")
+dist_sandstone_geo <- raster("data/cleaned_data/rast/dist_sandstone_geo.tif")
+dist_non_quart_geo <- raster("data/cleaned_data/rast/dist_non_quart_geo.tif")
+
+```
+
+Explore predictive power of each variable
+
+First plot hist of raster cell values next to map of that variable
+```{r}
+#Elevation
+par(mfrow=c(2,1))
+plot(dem, main="Elevation (mASL)", axes=FALSE)
+hist(dem, main="",xlab="mASL", ylab="cell count", maxpixels=10000000)
+par(mfrow=c(1,1))
+plot(tpi)
+#slope 
+par(mfrow=c(2,1))
+plot(slope, main="Slope (degrees))", axes=FALSE)
+hist(slope, main="",xlab="degrees", ylab="cell count", maxpixels=10000000)
+par(mfrow=c(1,1))
+
+#aspect 
+par(mfrow=c(2,1))
+plot(aspect, main="Aspect (Compass degrees))", axes=FALSE)
+hist(aspect, main="",xlab="Compass degrees", ylab="cell count", maxpixels=10000000)
+par(mfrow=c(1,1))
+
+#tpi 
+par(mfrow=c(2,1))
+plot(tpi, main="TPI", axes=FALSE)
+hist(tpi, main="",xlab="TPI", ylab="cell count", maxpixels=10000000)
+par(mfrow=c(1,1))
+
+#tri 
+par(mfrow=c(2,1))
+plot(tri, main="TRI", axes=FALSE)
+hist(tri, main="",xlab="TRI", ylab="cell count", maxpixels=10000000)
+par(mfrow=c(1,1))
+
+
+#dist_lakes 
+par(mfrow=c(2,1))
+plot(dist_lakes , main="dist_lakes ", axes=FALSE)
+hist(dist_lakes , main="",xlab="dist_lakes ", ylab="cell count", maxpixels=10000000)
+par(mfrow=c(1,1))
+
+#dist_rivers 
+par(mfrow=c(2,1))
+plot(dist_rivers , main="dist_rivers", axes=FALSE)
+hist(dist_rivers, main="",xlab="dist_rivers", ylab="cell count", maxpixels=10000000)
+par(mfrow=c(1,1))
+
+#dist_deposits 
+par(mfrow=c(2,1))
+plot(dist_deposits , main="dist_deposits", axes=FALSE)
+hist(dist_deposits, main="",xlab="dist_deposits", ylab="cell count", maxpixels=10000000)
+par(mfrow=c(1,1))
+
+#dist_lakes_rivers 
+par(mfrow=c(2,1))
+plot(dist_lakes_rivers , main="dist_lakes_rivers", axes=FALSE)
+hist(dist_lakes_rivers, main="",xlab="dist_lakes_rivers", ylab="cell count", maxpixels=10000000)
+par(mfrow=c(1,1))
+
+#dist_deposits_rivers 
+par(mfrow=c(2,1))
+plot(dist_deposits_rivers , main="dist_deposits_rivers", axes=FALSE)
+hist(dist_deposits_rivers, main="",xlab="dist_deposits_rivers", ylab="cell count", maxpixels=10000000)
+par(mfrow=c(1,1))
+
+#dist_sandstone_geo 
+par(mfrow=c(2,1))
+plot(dist_sandstone_geo  , main="dist_sandstone_geo ", axes=FALSE)
+hist(dist_sandstone_geo , main="",xlab="dist_sandstone_geo ", ylab="cell count", maxpixels=10000000)
+par(mfrow=c(1,1))
+
+#dist_non_quart_geo 
+par(mfrow=c(2,1))
+plot(dist_non_quart_geo , main="dist_non_quart_geo", axes=FALSE)
+hist(dist_non_quart_geo, main="",xlab="dist_non_quart_geo", ylab="cell count", maxpixels=10000000)
+par(mfrow=c(1,1))
+```
+2) look at relationship between variables and sites
+```{r}
+#issue with extents - have to make sure they're all the same
+#extent_rasts <- extent(slope)
+#dem <- raster("data/projected_utm37n/cop_dem30_15km_utm37n.tiff")
+##dem_cropped = raster::crop(dem, study_area)
+#dem_final = mask(dem_cropped, study_area, overwrite=TRUE)
+#dem_f <- setExtent(dem_final, slope)
+
+#writeRaster(dem_f, "data/cleaned_data/rast/dem.tif", overwrite=TRUE)
+r = list(slope,aspect,tpi,tri,dist_lakes,dem,
+                    dist_rivers,dist_deposits,dist_lakes_rivers,
+                    dist_deposits_rivers,dist_sandstone_geo,
+                    dist_non_quart_geo)
+rr <- lapply(r, rast)
+r1 <- rast(res=30, ext = ext(rr[[1]]))
+
+standard <- r1
+rs <- list(standard)
+#not working do manually for now
+for (i in 2:length(rr)){
+  rs[[i]] <- terra::resample(rr[[i]], standard, method='bilinear')
+}
+
+slope <- terra::resample(rr[[1]], standard, method='bilinear')
+rs[[1]] <- slope
+#convert back to raster (from spatraster)
+rf<- lapply(rs, raster)
+#finally get covariates stack
+covariates <- stack(rf)
+#create some nonsite points
+non_site_area <- st_difference(study_area, st_union(mustatils))
+#check its correct
+tmap_mode("view")
+tm_shape(non_site_area)+
+  tm_polygons(col = "blue")
+
+# create random points in non-site area
+t <- st_as_sf(st_sample(non_site_area, size = 169, type = "random"))
+t <- st_transform(t, crs=32637)
+non_sites <- t %>% 
+  mutate(value = 0) %>% 
+  dplyr::select(value, geom = x)
+  
+
+
+#extract values for mustatils
+m_points <- st_centroid(mustatils)
+sites <- m_points %>% 
+  mutate(value = 1) %>% 
+  dplyr::select(value)
+
+#merge sites and non sites
+all_sites <- rbind(sites, non_sites)
+
+locvals_all_sites <- data.frame(raster::extract(covariates, all_sites))
+locvals_all_sites$site <- as.numeric(as.character(all_sites$value))
+plot(locvals_all_sites)
+```
+
+
+
+
+
+
+
+
+

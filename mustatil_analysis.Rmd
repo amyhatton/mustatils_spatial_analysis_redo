@@ -1,0 +1,358 @@
+---
+title: "mustatil_analysis"
+author: "Amy Hatton"
+date: "26/07/2022"
+output: html_document
+---
+
+```{r}
+library(sf)
+library(tidyverse)
+library(terra)
+library(raster)
+library(tmap)
+library(tmaptools)
+library(stars)
+library(maptools)
+library(spatstat)
+```
+# Read in data
+
+```{r}
+mustatils <- st_read("data/projected_utm37n/mustatils_with_size_metrics.gpkg")
+dem <- raster("data/projected_utm37n/copdem30_5km_straight.tif")
+#lakes <- st_read("data/water_paul_gpkg/psb_compiled_lake_extents_with_jubbah.gpkg")
+#rivers <- st_read("data/water_paul_gpkg/hydroshed_100k_not_in_dunes.gpkg")
+#deposits <- st_read("data/water_paul_gpkg/psb_modelled_deposits_with_extents.gpkg")
+study_area <- st_read("data/projected_utm37n/study_area_straightened.gpkg")
+geo <- st_transform(st_read("../../saudi_geological_maps/digitised_map_whole_study_area_final.shp"), crs=32637)
+slope <- raster("data/projected_utm37n/slope.tif")
+aspect <- raster("data/projected_utm37n/aspect.tif")
+tpi <- raster("data/projected_utm37n/tpi.tif")
+tri <- raster("data/projected_utm37n/tri.tif")
+```
+
+# Rose diagram for direction of mustatils
+```{r}
+#prep data
+hist(mustatils$angle, plot=TRUE, bin=10)
+summary(mustatils$angle)
+
+ggplot() + 
+  geom_line(aes(x = c(180, 0), y = c(4, 4)), colour = "gray75") +
+  geom_line(aes(x = c(180, 0), y = c(8, 8)), colour = "gray75") +
+  geom_line(aes(x = c(180, 0), y = c(12, 12)), colour = "gray75") +
+  geom_line(aes(x = c(180, 0), y = c(16, 16)), colour = "gray75") +
+  geom_line(aes(x = c(180, 0), y = c(20, 20)), colour = "gray75") +
+  geom_vline(aes(xintercept = 0:6 * 30), colour = "gray75") +
+  geom_histogram(data = mustatils, aes(x = angle), 
+                 position = "stack", colour = "black", binwidth = 10,
+                 boundary = 0) + 
+  coord_polar(start = 3 * pi / 2, direction = -1) + 
+  scale_x_continuous(limits = c(0, 360), breaks = 0:6 * 30) +
+  scale_y_continuous(limits = c(0, 20)) +
+  theme_bw() + 
+  theme(panel.border = element_blank(), 
+        legend.margin = margin(unit(c(0, 5.5, 100, 5.5), "pt")),
+        axis.title.y = element_text(hjust = 0.75),
+        axis.title.x = element_text(vjust = 5),
+        plot.margin = margin(unit(c(50, 5.5, -100, 5.5), "pt")),
+        panel.grid = element_blank()) +
+  labs(title = "", y = "Count")
+
+ggsave( "plots/rose_plot.pdf")
+```
+
+
+#Get Geology values for each mustatil
+
+## First fix up geology attributes 
+
+```{r}
+names(geo)
+#fix geology attributes
+geo_df <- geo %>% dplyr::select(abbreviati, age, geology) %>% 
+  rename(geology_abbr = abbreviati) %>% 
+  tibble::rowid_to_column( "ID")
+
+geo_attr <- read.csv("../../mustatil_paper/geology1_consolidated_paper.csv", sep = ";") 
+
+#rename columns in geo_attr for joining
+geo_attr <- geo_attr %>% 
+  rename(geology_1 = Geology, age_1 = Age)
+
+geo_attr <- geo_attr %>% 
+  mutate(age_1 = tolower(age_1)) %>% 
+  mutate(geology_1 = tolower(geology_1))
+
+#geom <- geo %>% 
+  #dplyr::select(geom)
+geo_join <- dplyr::left_join(geo_df, geo_attr)
+
+#fix nulls
+geo_join <- geo_join %>% 
+  mutate(age = coalesce(age, age_1),
+         geology = coalesce(geology, geology_1)) 
+
+
+#fix geology and age for Qt (not sure why buty there are a bunch of NA's for that geology)
+geo_join <- geo_join %>% 
+  mutate(geology_abbr = case_when(geology =="Devonian-Silurian-Ordovician undivided" ~ "DSO", TRUE ~ geology_abbr ))%>% 
+  mutate(geology = case_when(geology_abbr == "Qt" ~ "Alluvial deposits", TRUE ~ geology)) %>% 
+  mutate(age = case_when(geology_abbr == "Qt" ~ "quaternary", TRUE ~ age)) %>% 
+  mutate(age = tolower(age)) %>% 
+  mutate(geology = tolower(geology))
+
+#issue with empty geometries
+#fixed_geo <- geo_join %>% filter(!st_is_empty(.))
+
+#check <- st_is_valid(geo_join)
+#check <-as.data.frame(check)
+
+#replace dash's with commmas
+geo_join<- geo_join %>% 
+  mutate(across('geology', str_replace, '-', ','))
+#isolate all geology that is not quaternary
+non_quart_geo <- filter(geo_join, age != "quaternary")
+sandstone_geo <- geo_join %>% 
+  filter(grepl("sandstone", geology))
+```
+Check the two geology maps to make sure they're right
+```{r}
+
+#all good
+tmap_mode("view")
+
+tm_shape(sandstone_geo)+
+  tm_polygons("geology_abbr")
+
+tm_shape(non_quart_geo)+
+  tm_polygons("geology_abbr")
+
+```
+
+```{r, eval = FALSE}
+library(magrittr)
+#convert mustatil to points
+m_points <- st_centroid(mustatils)
+
+poly <- geo_join %>% 
+  dplyr::select("geology_abbr") 
+st_crs(poly)
+
+#geology at the centre of each mustatil - make a barplot or some summary statistic of this
+m_geology <- st_intersection(m_points, poly)
+
+```
+
+#Fix the data (only need to run this once)
+```{r, eval=FALSE}
+dem<- rast(dem)
+x <- rast(dem)
+res(x) <- 30
+# make sure resolution is exactl 30mx30m
+dem_res30 <- terra::resample(dem, x)
+study_a_vect <- vect(study_area)
+dem_cropped = crop(dem_res30, study_a_vect)
+dem_final = mask(dem_cropped, study_a_vect, overwrite=TRUE)
+writeRaster(dem_final, "data/cleaned_data/rast/dem.tif")
+```
+
+#Read in fixed data
+
+```{r}
+dem <- rast("data/cleaned_data/rast/dem.tif")
+```
+
+Rasterise geology and water maps
+```{r, eval=FALSE}
+#geology
+non_quart_geo_rast <- rasterize(vect(non_quart_geo), dem, field=1)
+sandstone_geo_rast <- rasterize(vect(sandstone_geo), dem, field=1)
+writeRaster(non_quart_geo_rast, "data/cleaned_data/rast/non_quart_geo.tif")
+writeRaster(sandstone_geo_rast, "data/cleaned_data/rast/sandstone_geo.tif")
+#water maps
+rivers_r <- rasterize(vect(rivers), dem, field=1)
+lakes_r <- rasterize(vect(lakes), dem, field=1)
+deposits_r <- rasterize(vect(deposits), dem, field=1)
+#not working properly - just gives a raster with values of two export and do it in grass
+#need to change NA's to zeros!
+lakes_na <- terra::ifel(is.na(lakes_r), 0, lakes_r)
+rivers_na  <- terra::ifel(is.na(rivers_r ), 0, rivers_r )
+deposits_na<- terra::ifel(is.na(deposits_r ), 0,deposits_r )
+
+
+#add rasters d
+#still not working - did it in grass
+#import again
+lakes_rivers_r  <- rast("data/cleaned_data/rast/lakes_rivers.tif")
+deposits_rivers_r  <- rast("data/cleaned_data/rast/deposits_rivers.tif")
+#convert 0 back to na 
+lakes_rivers_na  <- terra::ifel(lakes_rivers_r == 0, NA, lakes_rivers_r)
+deposits_rivers_na <- terra::ifel(deposits_rivers_r == 0, NA, deposits_rivers_r )
+
+```
+#Create Distance maps (read in r keeps crashing)
+```{r}
+#d_rivers <- distance(rivers_r)
+#read them in because r was crashing
+dist_lakes <- raster("data/cleaned_data/rast/dist_lakes.tif")
+dist_rivers <- raster("data/cleaned_data/rast/dist_rivers.tif")
+dist_deposits <- raster("data/cleaned_data/rast/dist_deposits.tif")
+dist_lakes_rivers <- raster("data/cleaned_data/rast/dist_lakes_rivers.tif")
+dist_deposits_rivers <- raster("data/cleaned_data/rast/dist_deposits_rivers.tif")
+
+#create distance maps for geology
+#first convert to raster
+sandstone_geo_rast <- terra::rasterize(sandstone_geo, dem)
+dist_sandstone_geo <- terra::distance(sandstone_geo_rast)
+non_quart_geo_rast <- terra::rasterize(non_quart_geo, dem)
+dist_non_quart_geo <- terra::distance(non_quart_geo_rast)
+writeRaster(dist_sandstone_geo, "data/cleaned_data/rast/dist_sandstone_geo.tif")
+writeRaster(dist_non_quart_geo, "data/cleaned_data/rast/dist_non_quart_geo.tif")
+```
+
+
+#Create ppp mustatils
+```{r}
+m_points <- st_centroid(mustatils)
+coords <- as.data.frame(st_coordinates(m_points))
+m_owin <- as.owin(study_area)
+sppp <- ppp(x=coords$X, y=coords$Y, window=m_owin)
+```
+Assessing point distribution first steps:
+KDE
+```{r}
+#check bandwidth #366.9m
+
+bw.diggle(sppp)
+#another method nearest neighbour distance *3 = ~9000m
+nnd<- nndist(sppp)
+mean(nnd)
+?density.ppp
+mkde350 <- density.ppp(sppp, sigma=350)
+mkde1000 <- density.ppp(sppp, sigma=1000)
+mkde5000 <- density.ppp(sppp, sigma=5000)
+mkde9000 <- density.ppp(sppp, sigma=9000)
+
+
+#plot to pdf
+pdf("plots/kde.pdf", width=12, height=3)
+par(mfrow = c(1,3))
+plot(mkde1000,  main="Kernel density surface of sites (sigma=1km)")
+points(sppp, pch=1, cex=0.7, col = "grey80", lwd=1.3)
+
+plot(mkde5000,  main="Kernel density surface of sites (sigma=5km)")
+points(sppp, pch=1, cex=0.7, col = "grey80", lwd=1.3)
+
+plot(mkde9000,  main="Kernel density surface of sites (sigma=9km)")
+points(sppp, pch=1, cex=0.7, col = "grey80", lwd=1.3)
+
+dev.off()
+```
+
+#First Order Model
+##check out different variable
+
+```{r}
+#elevation
+dem <- raster("data/cleaned_data/rast/dem.tif")
+elev_im <- as.im.RasterLayer(dem)
+elev.rh <- rhohat(sppp, elev, confidence=0.95)
+#800 to 1400m
+hist.im(elev_im)
+pdf("plots/rhohat/elevation.pdf", width =7, height = 4)
+plot(elev.rh, main ="",xlab="Elevation (m)",xlim=c(800,1400), legend=FALSE)
+
+#lakes
+lakes_im <- as.im.RasterLayer(dist_lakes)
+lakes.rh <- rhohat(sppp, d_lakes_im, confidence=0.95)
+#0 to 40km
+hist.im(lakes_im)
+pdf("plots/rhohat/lakes.pdf", width =7, height = 4)
+plot(lakes.rh, main ="", xlab="Distance to lakes (m)",xlim=c(0,40000), legend=FALSE)
+
+#rivers
+rivers_im <- as.im.RasterLayer(dist_rivers)
+rivers.rh <- rhohat(sppp, rivers_im, confidence=0.95)
+#0 to 66km
+hist.im(rivers_im)
+pdf("plots/rhohat/rivers.pdf", width =7, height = 4)
+plot(rivers.rh, main ="", xlab="Distance to rivers (m)",xlim=c(0,66000), legend=FALSE)
+
+#deposits
+deposits_im <- as.im.RasterLayer(dist_deposits)
+deposits.rh <- rhohat(sppp, deposits_im, confidence=0.95)
+#0 to 38km
+hist.im(deposits_im)
+pdf("plots/rhohat/deposits.pdf", width =7, height = 4)
+plot(deposits.rh, main ="", xlab="Distance to deposits (m)",xlim=c(0,38000), legend=FALSE)
+
+#rivers and lakes
+lakes_r_im <- as.im.RasterLayer(dist_lakes_rivers)
+lakes_r.rh <- rhohat(sppp, lakes_r_im, confidence=0.95)
+#0 to 20km
+hist.im(lakes_r_im)
+pdf("plots/rhohat/lakes_rivers.pdf", width =7, height = 4)
+plot(lakes_r.rh, main ="", xlab="Distance to lakes and rivers (m)",xlim=c(0,20000), legend=FALSE)
+
+#rivers and deposits
+deposits_r_im <- as.im.RasterLayer(dist_deposits_rivers)
+deposits_r.rh <- rhohat(sppp, deposits_r_im , confidence=0.95)
+#0 to 66km
+hist.im(deposits_r_im)
+pdf("plots/rhohat/deposits_r.pdf", width =7, height = 4)
+plot(deposits_r.rh, main ="", xlab="Distance to deposits adn rivers (m)",xlim=c(0,66000), legend=FALSE)
+
+
+#sandstone
+sandstone_im <- as.im.RasterLayer(dist_sandstone_geo)
+sandstone.rh <- rhohat(sppp, sandstone_im, confidence=0.95)
+#0 to 50km
+hist.im(sandstone_im)
+pdf("plots/rhohat/sandstone.pdf", width =7, height = 4)
+plot(sandstone.rh, main ="", xlab="Distance to sandstone (m)",xlim=c(0,50000), legend=FALSE)
+
+#non quarternary geology
+non_quart_im <- as.im.RasterLayer(dist_non_quart_geo)
+non_quart.rh <- rhohat(sppp, non_quart_im, confidence=0.95)
+#0 to 50km
+hist.im(non_quart_im )
+pdf("plots/rhohat/non_quart_2.pdf", width =7, height = 4)
+plot(non_quart.rh, main ="", xlab="Distance to non quarternary geology (m)",xlim=c(0,30000), legend=FALSE)
+
+#tpi
+tpi_im <- as.im.RasterLayer(tpi)
+tpi.rh <- rhohat(sppp, tpi_im, confidence=0.95)
+#-8 to +10
+hist.im(tpi_im )
+pdf("plots/rhohat/tpi.pdf", width =7, height = 4)
+plot(tpi.rh, main ="", xlab="TPI",xlim=c(-8,10), legend=FALSE)
+
+#tri
+tri_im <- as.im.RasterLayer(tri)
+tri.rh <- rhohat(sppp, tri_im, confidence=0.95)
+#0 to 16
+hist.im(tri_im )
+pdf("plots/rhohat/tri.pdf", width =7, height = 4)
+plot(tri.rh, main ="", xlab="TRI",xlim=c(0,16), legend=FALSE)
+
+#slope
+slope_im <- as.im.RasterLayer(slope)
+slope.rh <- rhohat(sppp, slope_im, confidence=0.95)
+#0 to 40
+hist.im(slope_im )
+pdf("plots/rhohat/slope.pdf", width =7, height = 4)
+plot(slope.rh, main ="", xlab="Slope",xlim=c(0,40), legend=FALSE)
+
+#aspect
+aspect_im <- as.im.RasterLayer(aspect)
+aspect.rh <- rhohat(sppp, aspect_im, confidence=0.95)
+#0 to 360
+hist.im(aspect_im )
+pdf("plots/rhohat/aspect.pdf", width =7, height = 4)
+plot(aspect.rh, main ="", xlab="Aspect",xlim=c(0,360), legend=FALSE)
+```
+
+
+

@@ -1,0 +1,1235 @@
+---
+title: "exploratory analysis"
+author: "Amy Hatton"
+date: '2022-07-19'
+output: html_document
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(raster)
+library(sf)
+library(maptools)
+library(terra)
+library(tmap)
+library(spatstat)
+library(stars)
+```
+
+import data
+```{r}
+mustatils <- st_read("data/projected_utm37n/mustatils_with_size_metrics.gpkg")
+study_area <- st_read("data/projected_utm37n/study_area_straightened.gpkg")
+slope <- raster("data/projected_utm37n/slope.tif")
+aspect <- raster("data/projected_utm37n/aspect.tif")
+tpi_stack <- raster::brick("data/projected_utm37n/tpi_stack.tif")
+tri_stack <- raster::brick("data/projected_utm37n/tri_stack.tif")
+roughness_stack <- raster::brick("data/projected_utm37n/roughness_stack.tif")
+dem <- raster("data/cleaned_data/rast/dem.tif")
+dist_lakes <- raster("data/cleaned_data/rast/dist_lakes.tif")
+dist_rivers <- raster("data/cleaned_data/rast/dist_rivers.tif")
+dist_deposits <- raster("data/cleaned_data/rast/dist_deposits.tif")
+dist_lakes_rivers <- raster("data/cleaned_data/rast/dist_lakes_rivers.tif")
+dist_deposits_rivers <- raster("data/cleaned_data/rast/dist_deposits_rivers.tif")
+dist_sandstone_geo <- raster("data/cleaned_data/rast/dist_sandstone_geo.tif")
+dist_non_quart_geo <- raster("data/cleaned_data/rast/dist_non_quart_geo.tif")
+viewshed <- raster("data/cleaned_data/rast/t_vshed_whole_scaled.tif")
+```
+Look at the orientation data of mustatils
+```{r}
+mustatils
+rose(mustatils$angle, breaks = 10, start = "N")
+```
+
+
+
+Explore predictive power of each variable
+
+First plot hist of raster cell values next to map of that variable
+```{r}
+#Elevation
+par(mfrow=c(1,2))
+plot(dem, main="Elevation (mASL)", axes=FALSE)
+plot(mustatils, add=TRUE)
+hist(dem, main="",xlab="mASL", ylab="cell count", maxpixels=10000000)
+par(mfrow=c(1,1))
+
+#slope 
+par(mfrow=c(2,1))
+plot(slope, main="Slope (degrees))", axes=FALSE)
+plot(mustatils, add=TRUE)
+hist(slope, main="",xlab="degrees", ylab="cell count", maxpixels=10000000)
+par(mfrow=c(1,1))
+
+#aspect 
+par(mfrow=c(2,1))
+plot(aspect, main="Aspect (Compass degrees))", axes=FALSE)
+plot(mustatils, add=TRUE)
+hist(aspect, main="",xlab="Compass degrees", ylab="cell count", maxpixels=10000000)
+par(mfrow=c(1,1))
+
+#tpi_3
+par(mfrow=c(2,1))
+plot(tpi_stack$tpi_3, main="TPI 3", axes=FALSE)
+plot(mustatils, add=TRUE)
+hist(tpi_stack$tpi_3, main="",xlab="TPI", ylab="cell count", maxpixels=10000000)
+par(mfrow=c(1,1))
+
+#tpi_5
+par(mfrow=c(2,1))
+plot(tpi_stack$tpi_5 ,main="TPI 5", axes=FALSE)
+plot(mustatils, add=TRUE)
+hist(tpi_stack$tpi_5, main="",xlab="TPI", ylab="cell count", maxpixels=10000000)
+par(mfrow=c(1,1))
+
+#tpi_15
+par(mfrow=c(2,1))
+plot(tpi_stack$tpi_15, main="TPI 15", axes=FALSE)
+plot(mustatils, add=TRUE)
+hist(tpi_stack$tpi_15, main="",xlab="TPI", ylab="cell count", maxpixels=10000000)
+par(mfrow=c(1,1))
+
+#tri 3
+par(mfrow=c(2,1))
+plot(tri_stack$tri_3, main="TRI 3", axes=FALSE)
+plot(mustatils, add=TRUE)
+hist(tri_stack$tri_3, main="",xlab="TRI", ylab="cell count", maxpixels=10000000)
+par(mfrow=c(1,1))
+
+#tri 5
+par(mfrow=c(2,1))
+plot(tri_stack$tri_5, main="TRI 5", axes=FALSE)
+plot(mustatils, add=TRUE)
+hist(tri_stack$tri_5, main="",xlab="TRI", ylab="cell count", maxpixels=10000000)
+par(mfrow=c(1,1))
+
+#tri 15
+par(mfrow=c(2,1))
+plot(tri_stack$tri_15, main="TRI 15", axes=FALSE)
+plot(mustatils, add=TRUE)
+hist(tri_stack$tri_15, main="",xlab="TRI", ylab="cell count", maxpixels=10000000)
+par(mfrow=c(1,1))
+
+#Roughness 3
+par(mfrow=c(2,1))
+plot(roughness_stack$rough_3, main="Roughness 3", axes=FALSE)
+plot(mustatils, add=TRUE)
+hist(roughness_stack$rough_3, main="",xlab="Roughness", ylab="cell count", maxpixels=10000000)
+par(mfrow=c(1,1))
+
+#Roughness 5
+par(mfrow=c(2,1))
+plot(roughness_stack$rough_5, main="Roughness 5", axes=FALSE)
+plot(mustatils, add=TRUE)
+hist(roughness_stack$rough_5, main="",xlab="Roughness", ylab="cell count", maxpixels=10000000)
+par(mfrow=c(1,1))
+
+#Roughness 15
+par(mfrow=c(2,1))
+plot(roughness_stack$rough_15, main="Roughness 15", axes=FALSE)
+plot(mustatils, add=TRUE)
+hist(roughness_stack$rough_15, main="",xlab="Roughness", ylab="cell count", maxpixels=10000000)
+par(mfrow=c(1,1))
+
+#dist_lakes 
+par(mfrow=c(2,1))
+plot(dist_lakes , main="dist_lakes ", axes=FALSE)
+plot(mustatils, add=TRUE)
+hist(dist_lakes , main="",xlab="dist_lakes ", ylab="cell count", maxpixels=10000000)
+par(mfrow=c(1,1))
+
+#dist_rivers 
+par(mfrow=c(2,1))
+plot(dist_rivers , main="dist_rivers", axes=FALSE)
+plot(mustatils, add=TRUE)
+hist(dist_rivers, main="",xlab="dist_rivers", ylab="cell count", maxpixels=10000000)
+par(mfrow=c(1,1))
+
+#dist_deposits 
+par(mfrow=c(2,1))
+plot(dist_deposits , main="dist_deposits", axes=FALSE)
+plot(mustatils, add=TRUE)
+hist(dist_deposits, main="",xlab="dist_deposits", ylab="cell count", maxpixels=10000000)
+par(mfrow=c(1,1))
+
+#dist_lakes_rivers 
+par(mfrow=c(2,1))
+plot(dist_lakes_rivers , main="dist_lakes_rivers", axes=FALSE)
+plot(mustatils, add=TRUE)
+hist(dist_lakes_rivers, main="",xlab="dist_lakes_rivers", ylab="cell count", maxpixels=10000000)
+par(mfrow=c(1,1))
+
+#dist_deposits_rivers 
+par(mfrow=c(2,1))
+plot(dist_deposits_rivers , main="dist_deposits_rivers", axes=FALSE)
+plot(mustatils, add=TRUE)
+hist(dist_deposits_rivers, main="",xlab="dist_deposits_rivers", ylab="cell count", maxpixels=10000000)
+par(mfrow=c(1,1))
+
+#dist_sandstone_geo 
+par(mfrow=c(2,1))
+plot(dist_sandstone_geo  , main="dist_sandstone_geo ", axes=FALSE)
+plot(mustatils, add=TRUE)
+hist(dist_sandstone_geo , main="",xlab="dist_sandstone_geo ", ylab="cell count", maxpixels=10000000)
+par(mfrow=c(1,1))
+
+#dist_non_quart_geo 
+par(mfrow=c(2,1))
+plot(dist_non_quart_geo , main="dist_non_quart_geo", axes=FALSE)
+plot(mustatils, add=TRUE)
+hist(dist_non_quart_geo, main="",xlab="dist_non_quart_geo", ylab="cell count", maxpixels=10000000)
+par(mfrow=c(1,1))
+
+#viewshed 
+par(mfrow=c(2,1))
+plot(viewshed , main="Viewshed", axes=FALSE)
+plot(mustatils, add=TRUE)
+hist(viewshed, main="",xlab="Viewshed", ylab="cell count", maxpixels=10000000)
+par(mfrow=c(1,1))
+```
+2) look at relationship between variables and sites
+(doing eastness and northness instead of aspect)
+## Create eastness and northness raster (linear variable better than aspect where 0=360)
+```{r}
+
+northness <- cos(aspect * pi / 180)
+names(northness) <- "northness"
+eastness <- sin(aspect * pi / 180)
+names(eastness) <- "eastness"
+
+```
+
+```{r}
+#issue with extents - have to make sure they're all the same
+#extent_rasts <- extent(slope)
+#dem <- raster("data/projected_utm37n/cop_dem30_15km_utm37n.tiff")
+##dem_cropped = raster::crop(dem, study_area)
+#dem_final = mask(dem_cropped, study_area, overwrite=TRUE)
+#dem_f <- setExtent(dem_final, slope)
+
+#writeRaster(dem_f, "data/cleaned_data/rast/dem.tif", overwrite=TRUE)
+r = list(slope,aspect,tpi_stack$tpi_3, tpi_stack$tpi_5, tpi_stack$tpi_15,
+         tri_stack$tri_3, tri_stack$tri_5, tri_stack$tri_15,
+         roughness_stack$rough_3, roughness_stack$rough_5,roughness_stack$rough_15,
+         dem,dist_rivers,dist_deposits,dist_lakes_rivers,dist_deposits_rivers,
+         dist_sandstone_geo,dist_non_quart_geo,dist_lakes, viewshed, northness, eastness)
+#list of variable with good predictive power
+r = list(slope,tpi_stack$tpi_3, tpi_stack$tpi_5, 
+         tri_stack$tri_3, tri_stack$tri_5, tri_stack$tri_15,
+         roughness_stack$rough_3, roughness_stack$rough_5,roughness_stack$rough_15,
+         dem,dist_rivers,dist_sandstone_geo,dist_non_quart_geo,
+          viewshed,  eastness)
+
+#list of independent + good predictive variables
+r = list(tpi_stack$tpi_3, tpi_stack$tpi_5, 
+        roughness_stack$rough_5,dem,dist_rivers,
+        dist_sandstone_geo,viewshed,eastness)
+#r = list(aspect,tpi,dist_lakes_rivers,
+                    #dist_non_quart_geo)
+rr <- lapply(r, rast)
+r1 <- rast(res=30, ext = ext(rr[[1]]))
+
+standard <- r1
+rs <- list(standard)
+
+#not working do manually for now
+for (i in 1:length(rr)){
+  rs[[i]] <- terra::resample(rr[[i]], standard, method='bilinear')
+}
+#rs[[20]]
+#dfist to geo layers aren't named in the list - don't know why  but just fix here so we know what each layer is later
+
+#slope <- terra::resample(rr[[1]], standard, method='bilinear')
+#aspect <- terra::resample(rr[[1]], standard, method='bilinear')
+
+#rs[[1]] <- slope
+#rs[[1]] <- aspect
+#convert back to raster (from spatraster)
+rf<- lapply(rs, raster)
+#finally get covariates stack
+covariates <- stack(rf)
+
+#rename to make sure they're right
+
+#create some nonsite points
+non_site_area <- st_difference(study_area, st_union(mustatils))
+plot(non_site_area)
+#check its correct
+tmap_mode("view")
+tm_shape(non_site_area)+
+  tm_polygons(col = "blue")
+
+# create random points in non-site area
+#Create 5 * number of mustatils
+t <- st_as_sf(st_sample(non_site_area, size = 5*169, type = "random"))
+t <- st_transform(t, crs=32637)
+non_sites <- t %>% 
+  mutate(value = 0) %>% 
+  dplyr::select(value, x)
+
+#create the mustatil points (alternative to centroids below)
+#generate 5 random point within each mustatil polygon to get better idea
+m_points <- st_sample(mustatils, size = c(5,5), type = "random")  
+m_points <- st_as_sf(m_points)
+
+#version 2 with one point
+m_points_c <- st_centroid(mustatils)
+
+tmap_mode("view")
+tm_shape(mustatils)+
+  tm_polygons(col = "blue")+
+  tm_shape(m_points) +
+  tm_dots( col= "black")+
+  tmap_options(check.and.fix = TRUE)
+
+#extract values for mustatils
+#m_points <- st_centroid(mustatils)
+sites <- m_points %>% 
+  dplyr::mutate(value = 1) %>% 
+  dplyr::select(value)
+
+#merge sites and non sites
+all_sites <- rbind(sites, non_sites)
+
+locvals_all_sites <- data.frame(raster::extract(covariates, all_sites))
+locvals_all_sites$site <- as.numeric(as.character(all_sites$value))
+plot(locvals_all_sites)
+
+m_environ_data <- data.frame(raster::extract(covariates,m_points_c))
+
+```
+
+## Histograms of values of locvals for sites and non-sites
+```{r}
+#elevation doesn't seem to be good predictor
+par(mfrow=c(2,1))
+hist(locvals_all_sites$dem[locvals_all_sites$site==1], breaks=seq(700,1500,100))
+hist(locvals_all_sites$dem[locvals_all_sites$site==0], breaks=seq(700,1500,100))
+par(mfrow=c(1,1))
+
+#aspect - looks good sites clustered in aspect 10-180 degrees (E)
+par(mfrow=c(2,1))
+hist(locvals_all_sites$aspect[locvals_all_sites$site==1], breaks=seq(0,360,10))
+hist(locvals_all_sites$aspect[locvals_all_sites$site==0], breaks=seq(0,360,10))
+par(mfrow=c(1,1))
+
+#slope - mustatils slightly more spread out (occur on high slope (30 degrees))
+#but not difference enough to be good predictor
+par(mfrow=c(2,1))
+hist(locvals_all_sites$slope[locvals_all_sites$site==1], breaks=seq(0,45,5))
+hist(locvals_all_sites$slope[locvals_all_sites$site==0], breaks=seq(0,45,5))
+par(mfrow=c(1,1))
+range(locvals_all_sites$slope)
+#tpi3- looks good skewed to more  positive values for mustatils
+par(mfrow=c(2,1))
+hist(locvals_all_sites$tpi_3[locvals_all_sites$site==1], breaks=seq(-10,10,1))
+hist(locvals_all_sites$tpi_3[locvals_all_sites$site==0], breaks=seq(-10,10,1))
+par(mfrow=c(1,1))
+
+#tpi5- looks good skewed to more  negative values for mustatils
+par(mfrow=c(2,1))
+hist(locvals_all_sites$tpi_5[locvals_all_sites$site==1], breaks=seq(-50,50,10))
+hist(locvals_all_sites$tpi_5[locvals_all_sites$site==0], breaks=seq(-50,50,10))
+par(mfrow=c(1,1))
+
+#tpi15- not great predictor, skewed slighty negative for mustatils
+par(mfrow=c(2,1))
+hist(locvals_all_sites$tpi_15[locvals_all_sites$site==1], breaks=seq(-80,110,10))
+hist(locvals_all_sites$tpi_15[locvals_all_sites$site==0], breaks=seq(-80,110,10))
+par(mfrow=c(1,1))
+
+#tri3- mustatils skewed to higher values - not much of a differnect though
+par(mfrow=c(2,1))
+hist(locvals_all_sites$tri_3[locvals_all_sites$site==1], breaks=seq(0,20,1))
+hist(locvals_all_sites$tri_3[locvals_all_sites$site==0], breaks=seq(0,20,1))
+par(mfrow=c(1,1))
+
+#tri5- mustatils skewed to hiher values - not much of a differnect though
+par(mfrow=c(2,1))
+hist(locvals_all_sites$tri_5[locvals_all_sites$site==1], breaks=seq(0,150,5))
+hist(locvals_all_sites$tri_5[locvals_all_sites$site==0], breaks=seq(0,150,5))
+par(mfrow=c(1,1))
+range(locvals_all_sites$tri_15)
+#tri15- mustatils skewed to hiher values - not much of a differnect though
+par(mfrow=c(2,1))
+hist(locvals_all_sites$tri_15[locvals_all_sites$site==1], breaks=seq(0,2900,100))
+hist(locvals_all_sites$tri_15[locvals_all_sites$site==0], breaks=seq(0,2900,100))
+par(mfrow=c(1,1))
+
+#roughness3- mustatils skewed to higher values - not much of a differnect though
+par(mfrow=c(2,1))
+hist(locvals_all_sites$rough_3[locvals_all_sites$site==1], breaks=seq(0,55,5))
+hist(locvals_all_sites$rough_3[locvals_all_sites$site==0], breaks=seq(0,55,5))
+par(mfrow=c(1,1))
+
+#roughness5- mustatils skewed to hiher values - not much of a differnect though
+par(mfrow=c(2,1))
+hist(locvals_all_sites$rough_5[locvals_all_sites$site==1], breaks=seq(0,105,5))
+hist(locvals_all_sites$rough_5[locvals_all_sites$site==0], breaks=seq(0,105,5))
+par(mfrow=c(1,1))
+
+#roughness15- mustatils skewed to hiher values - not much of a differnect though
+par(mfrow=c(2,1))
+hist(locvals_all_sites$rough_15[locvals_all_sites$site==1], breaks=seq(0,240,10))
+hist(locvals_all_sites$rough_15[locvals_all_sites$site==0], breaks=seq(0,240,10))
+par(mfrow=c(1,1))
+#dist lakes - mustatils more spread out , but 40 are very close (within 1km lakes) - check predictive value
+par(mfrow=c(2,1))
+hist(locvals_all_sites$dist_lakes.PERMANENT[locvals_all_sites$site==1], breaks=seq(0,40000,1000))
+hist(locvals_all_sites$dist_lakes.PERMANENT[locvals_all_sites$site==0], breaks=seq(0,40000,1000))
+par(mfrow=c(1,1))
+
+#dist rivers - mustatils much closer to rivers than random sites!! good predictor
+par(mfrow=c(2,1))
+hist(locvals_all_sites$dist_rivers[locvals_all_sites$site==1], breaks=seq(0,65000,1000))
+hist(locvals_all_sites$dist_rivers[locvals_all_sites$site==0], breaks=seq(0,65000,1000))
+par(mfrow=c(1,1))
+range(locvals_all_sites$dist_deposits.PERMANENT)
+#dist deposits - mustatils more spread out, but lots close to deposits check
+par(mfrow=c(2,1))
+hist(locvals_all_sites$dist_deposits.PERMANENT[locvals_all_sites$site==1], breaks=seq(0,40000,1000))
+hist(locvals_all_sites$dist_deposits.PERMANENT[locvals_all_sites$site==0], breaks=seq(0,40000,1000))
+par(mfrow=c(1,1))
+
+#dist lakes_rivers  - looks close - mustatils more bunched at small distances
+par(mfrow=c(2,1))
+hist(locvals_all_sites$dist_lakes_rivers [locvals_all_sites$site==1], breaks=seq(0,20000,1000))
+hist(locvals_all_sites$dist_lakes_rivers [locvals_all_sites$site==0], breaks=seq(0,20000,1000))
+par(mfrow=c(1,1))
+
+#dist deposits rivers similar to lakes rivers also looks good
+par(mfrow=c(2,1))
+hist(locvals_all_sites$dist_deposits_rivers[locvals_all_sites$site==1], breaks=seq(0,20000,1000))
+hist(locvals_all_sites$dist_deposits_rivers[locvals_all_sites$site==0], breaks=seq(0,20000,1000))
+par(mfrow=c(1,1))
+
+#dist sandstone geo mustatils mostly clustered in first km
+par(mfrow=c(2,1))
+hist(locvals_all_sites$dist_sandstone_geo[locvals_all_sites$site==1], breaks=seq(0,53000,1000))
+hist(locvals_all_sites$dist_sandstone_geo[locvals_all_sites$site==0], breaks=seq(0,53000,1000))
+par(mfrow=c(1,1))
+
+range(locvals_all_sites$dist_sandstone_geo)
+#dist non quart geo - very good 
+par(mfrow=c(2,1))
+hist(locvals_all_sites$dist_non_quart_geo[locvals_all_sites$site==1], breaks=seq(0,60000,1000))
+hist(locvals_all_sites$dist_non_quart_geo[locvals_all_sites$site==0], breaks=seq(0,60000,1000))
+par(mfrow=c(1,1))
+
+#viewshed
+par(mfrow=c(2,1))
+hist(locvals_all_sites$t_vshed_whole_scaled[locvals_all_sites$site==1], breaks=seq(0,1,0.1))
+hist(locvals_all_sites$t_vshed_whole_scaled[locvals_all_sites$site==0], breaks=seq(0,1,0.1))
+par(mfrow=c(1,1))
+range(locvals_all_sites$t_vshed_whole_scaled)
+
+#eastness - definite trend most sites are east facing
+par(mfrow=c(2,1))
+hist(locvals_all_sites$eastness[locvals_all_sites$site==1], breaks=seq(-1,1,0.1))
+hist(locvals_all_sites$eastness[locvals_all_sites$site==0], breaks=seq(-1,1,0.1))
+par(mfrow=c(1,1))
+range(eastness)
+#northness - sites and non sites show same trend
+par(mfrow=c(2,1))
+hist(locvals_all_sites$northness[locvals_all_sites$site==1], breaks=seq(-1,1,0.1))
+hist(locvals_all_sites$northness[locvals_all_sites$site==0], breaks=seq(-1,1,0.1))
+par(mfrow=c(1,1))
+```
+
+## Create univariate models to check predictive power
+```{r}
+library(lmtest)
+#slope
+slope.m <- glm(site~slope.PERMANENT, data = locvals_all_sites, family=binomial(logit))
+summary(slope.m)
+lrtest(slope.m) #very good lrt pvalue of 2.692e-06 ***
+
+#aspect
+aspect.m <- glm(site~aspect.PERMANENT, data = locvals_all_sites, family=binomial(logit))
+summary(aspect.m)
+lrtest(aspect.m) #very good pvalue 2.2e-16 ***
+
+#eastness 
+eastness.m <- glm(site~eastness, data = locvals_all_sites, family=binomial(logit))
+summary(eastness.m)
+lrtest(eastness.m) #very good pvalue 2.2e-16 *** 
+
+#northness
+northness.m <- glm(site~northness, data = locvals_all_sites, family=binomial(logit))
+summary(northness.m)
+lrtest(northness.m) #bad p value 0.5826
+
+#tpi
+tpi3.m <- glm(site~tpi_3, data = locvals_all_sites, family=binomial(logit))
+summary(tpi.m)
+lrtest(tpi.m) #very good pvalue 2.2e-16 ***
+
+#tpi
+tpi5.m <- glm(site~tpi_5, data = locvals_all_sites, family=binomial(logit))
+summary(tpi5.m)
+lrtest(tpi5.m) #very good p-value 2.4e-12 ***
+
+#tpi
+tpi15.m <- glm(site~tpi_15, data = locvals_all_sites, family=binomial(logit))
+summary(tpi15.m)
+lrtest(tpi15.m) #okay p-value 0.01955 *
+
+#tri
+tri3.m <- glm(site~tri_3, data = locvals_all_sites, family=binomial(logit))
+summary(tri3.m)
+lrtest(tri3.m) #very good pvalue 1.564e-07 ***
+
+#tri
+tri5.m <- glm(site~tri_5, data = locvals_all_sites, family=binomial(logit))
+summary(tri5.m)
+lrtest(tri5.m) #very good p-value 9.357e-10 ***
+
+#tri
+tri15.m <- glm(site~tri_15, data = locvals_all_sites, family=binomial(logit))
+summary(tri15.m)
+lrtest(tri15.m) #very good p-value 3.598e-05 ***
+
+rough3.m <- glm(site~rough_3, data = locvals_all_sites, family=binomial(logit))
+summary(rough3.m)
+lrtest(rough3.m) #very good p-value 2.209e-07 ***
+
+rough5.m <- glm(site~rough_5, data = locvals_all_sites, family=binomial(logit))
+summary(rough5.m)
+lrtest(rough5.m) #very good p-value 2.167e-10 ***
+
+rough15.m <- glm(site~rough_15, data = locvals_all_sites, family=binomial(logit))
+summary(rough15.m)
+lrtest(rough15.m) #very good p-value 5.026e-09 ***
+
+#dist_lakes
+dist_lakes.m <- glm(site~dist_lakes.PERMANENT, data = locvals_all_sites, family=binomial(logit))
+summary(dist_lakes.m)
+lrtest(dist_lakes.m) #not good pvalue 0.8734
+
+#dem
+dem.m <- glm(site~dem, data = locvals_all_sites, family=binomial(logit))
+summary(dem.m)
+lrtest(dem.m) # good pvalue 2.628e-06 ***
+
+#dist_rivers
+dist_rivers.m <- glm(site~dist_rivers.PERMANENT, data = locvals_all_sites, family=binomial(logit))
+summary(dist_rivers.m)
+lrtest(dist_rivers.m) #very good pvalue 2.2e-16 ***
+
+#dist_deposits
+dist_deposits.m <- glm(site~dist_deposits.PERMANENT, data = locvals_all_sites, family=binomial(logit))
+summary(dist_deposits.m)
+lrtest(dist_deposits.m) #bad pvalue 0.6701
+
+#dist_lakes_rivers 
+dist_lakes_rivers.m <- glm(site~dist_lakes_rivers.PERMANENT, data = locvals_all_sites, family=binomial(logit))
+summary(dist_lakes_rivers.m)
+lrtest(dist_lakes_rivers.m) #very good pvalue 2.91e-12 ***
+
+#dist_deposits_rivers
+dist_deposits_rivers.m <- glm(site~dist_deposits_rivers.PERMANENT, data = locvals_all_sites, family=binomial(logit))
+summary(dist_deposits_rivers.m)
+lrtest(dist_deposits_rivers.m) #very good pvalue 4.922e-13 ***
+
+#dist_sandstone_geo 
+dist_sandstone_geo.m <- glm(site~dist_sandstone_geo , data = locvals_all_sites, family=binomial(logit))
+summary(dist_sandstone_geo.m)
+lrtest(dist_sandstone_geo.m) #very good pvalue 2.2e-16 ***
+
+#dist_non_quart_geo 
+dist_non_quart_geo.m <- glm(site~dist_non_quart_geo , data = locvals_all_sites, family=binomial(logit))
+summary(dist_non_quart_geo.m)
+lrtest(dist_non_quart_geo.m) #very very good 2.2e-16 ***
+
+#viewshed
+viewshed.m <- glm(site~t_vshed_whole_scaled, data=locvals_all_sites, family=binomial(logit))
+summary(viewshed.m)
+lrtest(viewshed.m) #very good pvalue < 2.2e-16 ***
+```
+
+### Univariate 
+
+##Multivariate regression!
+Going to incorporate the following variable as they seem to be good predictors:
+
+- east facing
+- elevation
+- slope
+- tpi 3 + 5
+- tri 3, 5, 15
+- roughness 3, 5 ,15
+- dist to rivers
+- distance to lakes and rivers
+- distance to deposits and rivers 
+- distance to sandstone geo
+- dist to non quaternary geology
+- viewshed
+
+#### Pearsons correlation
+
+Test for multicollinearity between variables
+```{r}
+library(virtualspecies)
+removeCollinearity(covariates, multicollinearity.cutoff = 0.7,
+                   select.variables = TRUE, sample.points = TRUE, nb.points = 100000,
+                   plot = TRUE) # No collinear variables
+
+```
+```{r}
+names(locvals_all_sites)
+#mod <- glm(site~e_facing+tpi+dist_rivers+dist_non_quart_geo, data = locvals_all_sites, family=binomial(logit))
+#mod <- glm(site~slope.PERMANENT + tpi_3 + tpi_5 + tri_3 + tri_5 + tri_15 + rough_3 + rough_5 + rough_15 + dem + 
+#dist_rivers.PERMANENT + dist_lakes_rivers.PERMANENT + dist_deposits_rivers.PERMANENT + dist_sandstone_geo + 
+#dist_non_quart_geo + t_vshed_whole_scaled + e_facing,
+#data = locvals_all_sites, family = binomial(logit))
+mod <- glm(site~eastness + tpi_3 + tpi_5 + dem + rough_5 +
+dist_rivers.PERMANENT  + dist_sandstone_geo + t_vshed_whole_scaled,
+data = locvals_all_sites, family = binomial(logit))
+summary(mod)
+```
+distance to rivers is  not significxant in the multivariate model:
+use step aic to step through diff models
+
+```{r}
+library(MASS)
+mod2 <- stepAIC(mod)
+mod2$anova
+summary(mod2)
+```
+
+### Create prediction surface
+```{r}
+
+#final look at multivariate regression
+summary(mod2)
+logodds <- 5.008e+00+(rs[[1]]*5.532e-01 + rs[[3]]*4.156e-01 + rs[[6]]*-6.519e-01 + rs[[8]]* -2.731e-03 + rs[[9]]*-2.159e-01 + rs[[11]]*5.886e-02 + 
+    rs[[12]]*-6.568e-03 + rs[[16]]*-8.810e-05 + rs[[17]]*-3.384e-05 + 
+    rs[[18]]*-5.456e-03 + rs[[20]]*5.710e+00 + e_facing*1.113e+00)
+relprob <- (exp(logodds))/(1+(exp(logodds)))
+plot(relprob)
+writeRaster(relprob, "data/outputs/prediction_surface_multivariat_mod.tif", overwrite=TRUE)
+points(all_sites[all_sites$value==1,])
+
+rs[[20]]
+```
+
+# Point Process Model (PPM)
+
+#### Create ppp mustatils
+```{r}
+library(spatstat)
+coords <- as.data.frame(st_coordinates(m_points_c))
+m_owin <- as.owin(study_area)
+sppp <- ppp(x=coords$X, y=coords$Y, window=m_owin)
+```
+
+#Density based approac
+##KDE
+Kernel density estimation to see general patterning of points
+Kernel size is very important so need to test different sizes and see what works best for the data
+
+I will start with small kernel = 1000m, empirical = 3xnearest neighbour distance (60m), large kernel 10km 
+
+First Calculate nearest neigbour distance 
+```{r}
+nn <- 3*mean(nndist(sppp))
+```
+Calculate KDE for three different sigma's
+```{r}
+e_kde <- density.ppp(sppp, sigma = nn)
+plot(e_kde)
+s_kde <- density.ppp(sppp, sigma = 2000)
+plot(s_kde)
+l_kde <- density.ppp(sppp, sigma = 15000)
+plot(l_kde)
+
+pdf("plots/kde_final.pdf", width=12, height=3)
+par(mfrow = c(1,3))
+
+plot(s_kde,  main="sigma=2km")
+points(sppp, pch=1, cex=0.5, col = "grey80",  lwd=0.5)
+
+plot(e_kde,  main="sigma=9km")
+points(sppp, pch=1, cex=0.5, col = "grey80", lwd=0.5)
+
+plot(l_kde,  main="sigma=15km")
+points(sppp, pch=1, cex=0.5, col = "grey80", lwd=0.5)
+dev.off()
+```
+#Distance based approaches
+
+## K function
+Basic first order patterning (mustatils more clustered at <5km than CSR)
+```{r}
+plot(Kest(sppp, correction="iso"))
+
+#with montecarlo simulation start small
+pcf_1 = envelope(sppp, pcf, nsim=999, correction="iso", nrank=1)
+plot(pcf_1)
+```
+
+#### convert to im stack
+Convert all of the useful variables into im's and create a stack - look at rhohat plots for each and export them 
+
+Variables that have good predictive power and are independent
+- TPI 3
+- TPI 5
+- Roughness 5
+- Elevation
+- Distance to rivers 
+- Distance to sandstone geology
+- Viewshed
+- Eastness
+
+```{r}
+#create an empty list
+im_stack <- list()
+#try to convert them all in a for loop - yay, worked!
+for (i in 1:length(rs)){
+  im_stack[[i]] <- as.im(as(raster(rs[[i]]), "SpatialGridDataFrame"))
+}
+#name the items in the list so we know for later
+names(im_stack) <- c("tpi_3_im", "tpi_5_im", 
+        "rough_5_im","dem_im","dist_rivers_im",
+        "dist_sandstone_geo_im","viewshed_im","eastness_im")
+im_stack
+
+c_trend <- ~tpi_3_im + tpi_5_im + rough_5_im +dem_im + dist_rivers_im + 
+  dist_sandstone_geo_im + viewshed_im + eastness_im 
+```
+Create Rhohat plots for each of the variables to see their effect on mustatil location again
+
+automatically for all seems to work but plots are a bit weird - can work on it later doing it manually for now.
+```{r rhohat automated, eval=FALSE}
+rhohat_list <- list()
+for (i in 1:length(im_stack)){
+  rhohat_list[[i]] <- rhohat(sppp, im_stack[[i]], confidence=0.95)
+}
+plot(rhohat_list[[8]])
+```
+```{r get xlim for rhohat plots}
+summary(m_environ_data)
+```
+
+
+```{r rhohat plots}
+pdf("plots/rhohat/all_rhohats_long.pdf", width= 7, height=10.5)
+par(mfrow = c(4,2))
+plot(rhohat_list[[1]], main = "Topographic Position Index 90m",xlim=c(-3,7),legend=FALSE) #,xlim=c(-3,7)
+plot(rhohat_list[[2]], main = "Topographic Position Index 150m",xlim=c(-35,55), legend=FALSE)
+plot(rhohat_list[[3]], main = "Terrain Roughness 150m",xlim=c(0,100), legend=FALSE)
+plot(rhohat_list[[4]], main = "Elevation (masl)", legend=FALSE)
+plot(rhohat_list[[5]], main = "Distance to rivers",xlim=c(0,25000), legend=FALSE)
+plot(rhohat_list[[6]], main = "Distance to sandstone outcrops",xlim=c(0,35000), legend=FALSE)
+plot(rhohat_list[[7]], main = "Total viewshed", legend=FALSE)
+plot(rhohat_list[[8]], main = "Eastness", legend=FALSE)
+dev.off()
+locvals_all_sites
+```
+
+Plot a map of each of the variables to go in the top corner of the rhohat plots
+
+```{r variable maps for rhohat}
+#set up palette for tpi
+library(RColorBrewer)
+cols <- brewer.pal(3, "PRGn")
+pal <- colorRampPalette(cols)
+library(viridis)
+
+pdf("plots/rhohat/variable_maps.pdf", width=14, height=5)
+par(mfrow = c(2,4))
+plot(tpi_stack$tpi_3, main="TPI 3", col=pal(12), axes=FALSE, box=FALSE, legend.args=list(text="",side=2))
+plot(tpi_stack$tpi_5, main="TPI 5", col=pal(12), axes=FALSE, box=FALSE, legend.args=list(text="",side=2))
+plot(roughness_stack$rough_5, main="Roughness 5", col=viridis(10), axes=FALSE, box=FALSE, legend.args=list(text="",side=2))
+plot(dem, main="DEM", col=viridis(20), axes=FALSE, box=FALSE, legend.args=list(text="",side=2))
+plot(dist_rivers, main="Dist rivers", col=plasma(20), axes=FALSE, box=FALSE, legend.args=list(text="",side=2), horizontal=TRUE )
+plot(dist_sandstone_geo, main="Dist sandstone", col=plasma(20), axes=FALSE, box=FALSE, legend.args=list(text="",side=2))
+plot(viewshed, main="Viewshed", col=viridis(10), axes=FALSE, box=FALSE, legend.args=list(text="",side=2) )
+plot(eastness, main="Eastness", col=pal(10), axes=FALSE, box=FALSE, legend.args=list(text="",side=2 ))
+dev.off()
+
+
+```
+
+#Point process model
+```{r}
+#null model
+mod0 <- ppm(sppp, ~1)
+pcf_null <- envelope(mod0, fun=pcfinhom, correction="iso", nsim=999)
+
+pdf(width=5, height=4, file = "plots/pcf_final/pcf_null_final_999sim.pdf")
+plot(pcf_null, legend=FALSE, main="CSR model")
+dev.off()
+
+#first order
+ppm_mod1 <- step(ppm(sppp, trend=c_trend, covariates = im_stack , correction="iso", method = "logi"))
+pcf_mod1 <- envelope(ppm_mod1, fun=pcfinhom, correction="iso", nsim=999)
+
+pdf(width=9, height=7, file = "plots/pcf_first_order_zoomed_999sim.pdf")
+plot(pcf_mod1,xlim=c(0,10000), ylim=c(0,100), legend=FALSE, main="First-order model")
+dev.off()
+
+#model is better than null
+#prediction surface use coarser grid - this keeeps crashing r
+r_90 <- rast(res=90, ext = ext(rr[[1]]), vals=1)
+r_90 <- raster(r_90)
+r_90 <- as.im(as(r_90, "SpatialGridDataFrame"))
+mod1_surf <- predict(ppm_mod1, locations=as.mask(r_90))
+plot(mod1_surf)
+pdf(width=9, height=7, file = "plots/predicted_intensity_1order_test_1.pdf")
+plot(mod1_surf, legend=FALSE, main="Predicted intensity")
+dev.off()
+#worked but its not helful- need to normalise go back to manual method
+
+#manually instead
+summary(ppm_mod1)
+rf[[2]]
+logodds_ppm <- -1.881510e+01+(e_facing*1.137021e+00)+(rf[[2]]*5.133228e-01)+(rf[[3]]*-1.488761e-04)+(rf[[4]]*-6.033031e-03)
+relprob_ppm <- (exp(logodds_ppm))/(1+(exp(logodds_ppm)))
+
+plot(logodds_ppm)
+
+pdf(width=9, height=7, file = "plots/predicted_intensity_1order_test_2.pdf")
+plot(log_odds_ppm, legend=FALSE, main="Predicted intensity")
+dev.off()
+
+writeRaster(relprob, "data/outputs/prediction_surface_multivariat_mod.tif")
+points(all_sites[all_sites$value==1,])
+summary(relprob_ppm)
+
+```
+##Log transformed variables
+```{r, eval=FALSE}
+log_m <- step(ppm(sppp, trend=~log(X1+1)+log(X2+1)+log(X3+1)+log(X4+1),  covariates =list(X1=tpi_im, X2=dist_lakes_rivers_im, X3=dist_non_quart_geo_im, X4=e_facing_im) , correction="iso", method = "logi"))
+pcf_mod1 <- envelope(log_m, fun=pcfinhom, correction="iso", nsim=99)
+plot(pcf_mod1)
+
+logm_surf <- predict(log_m, locations=as.mask(r_90))#bynch of Nan
+```
+"tpi", "dist_lakes_rivers", "dist_non_quart_geo", "e_facing"
+
+
+## Area interaction model (first and second order)
+
+interaction until 2000m (there is clustering from 0 to ~3000m )
+
+```{r}
+mod_2nd_o <- step(ppm(sppp, trend=c_trend, interaction = AreaInter(3000), covariates = im_stack, method="logi"))
+pcf_mod_2nd_o <- envelope(mod_2nd_o, fun=pcfinhom, correction="iso", nsim=999)
+summary(mod_2nd_o)
+pdf(width=9, height=7, file = "plots/pcf_2nd_order_zoomed_999sim.pdf")
+plot(pcf_mod_2nd_o,xlim=c(0,10000), ylim=c(0,250), legend=FALSE, main="First and second-order model")
+dev.off()
+```
+
+
+```{r plot pcf}
+pdf(width=10, height=3, file = "plots/pcfs.pdf")
+par(mfrow=c(1,3))
+plot(pcf_null, xlim=c(0,10000), ylim=c(0,200), legend=FALSE, main="CSR model")
+plot(pcf_mod1, xlim=c(0,10000), ylim=c(0,200),legend=FALSE, main="First-order model") #xlim=c(0,10000), ylim=c(0,100),
+plot(pcf_mod_2nd_o,xlim=c(0,10000), ylim=c(0,200), legend=FALSE, main="First and second-order model") #xlim=c(0,10000), ylim=c(0,250),
+dev.off()
+```
+### Compare models
+```{r}
+AIC(mod0)
+AIC(ppm_mod1)
+AIC(mod_2nd_o)
+
+#simulate points for each model
+null_sim <- simulate(mod0)
+f_sim <- simulate(ppm_mod1)
+f_s_sim <- simulate(mod_2nd_o)
+tmap_mode("plot")
+
+null_sim_sf <- st_as_sf(null_sim, crs=32637)
+f_sim_sf <- st_as_sf(f_sim, crs=32637)
+f_s_sim_sf <- st_as_sf(f_s_sim, crs=32637)
+```
+
+```{r}
+#plot
+pdf(width=9, height=8, file = "plots/simulated_points.pdf")
+par(mfrow=c(3,2))
+tm_shape(null_sim_sf)+
+  tm_polygons(col = "#433e85")+
+  tm_dots(col = "white",size = 0.4)
+
+tm_shape(f_sim_sf)+
+  tm_polygons(col = "#433e85")+
+  tm_dots(col = "white",size = 0.4)
+
+tm_shape(f_s_sim_sf)+
+  tm_polygons(col = "#433e85")+
+  tm_dots(col = "white",size = 0.4)
+dev.off()
+```
+## Mustatil length DBscan
+
+Create a marked point pattern (mark is the mustatil length) so we can see what effect length has on patterning.
+```{r}
+#DBSCAN in R
+
+# permute through different eps distances (from the mark correlation 18000-19000)
+library(dbscan)
+clustering <- dbscan(cbind(coords$X, coords$Y), minPts = 3, eps=29787.05/2)
+
+
+#read in the mustatil data with size info
+m_length <- st_read("data/projected_utm37n/mustatils_with_size_metrics.gpkg")
+m_len_c <- st_as_sf(cbind(coords, m_length[,7, drop=FALSE]))
+#m_len_c <- st_transform(m_len_c, epsg=4326)
+m <- st_as_sf(m_points_c)
+m_points_latlong <- st_transform(m, crs =4326)
+coords_latlong <- as_data_frame(st_coordinates(m_points_latlong))
+m_clust_df <- m_len_c %>% st_set_geometry(NULL)
+m_clust_df$cluster <- clustering$cluster # add cluster vector to original data
+
+m_clust_df_lat <- cbind(m_clust_df[,c(3,4)], coords_latlong[,c(1,2)])
+groups  <- subset(m_clust_df_lat, m_clust_df_lat$cluster > 0) # define groups
+noise  <- subset(m_clust_df_lat, m_clust_df_lat$cluster == 0) # define noise
+
+#remove the ones that don't have a cluster
+#m_clust_df <- na.omit(m_len_df)
+names(m_clust_df) <- tolower(names(m_clust_df))
+
+points <- ppp(x=m_clust_df$x,y=m_clust_df$y, marks=m_clust_df$length, window= m_owin)
+```
+The mark correlation function (markcorr) estimates the correlation of points based on their mark,
+eg what effect does mustatil length have on their distribution
+```{r}
+#can change this to higher later (eg 999)
+numSims=999
+mcorr_1 <- envelope (points, markcorr, nsim=numSims)
+pdf(width=5, height=5,  file="plots/mark_corr.pdf")
+plot(mcorr_1, main="mark correlation function", legend=FALSE)
+dev.off()
+
+max(mcorr_1$obs) #max mark correlation is at ~30km
+```
+####Code from Carrero-Pazos et al 2019####
+
+#### A function to calculate the ranks for each group.
+
+```{r}
+partition.ranks.by.cluster <- function(cluster.ids, m_clust_df, shuffle=FALSE) {
+    cluster.ranks <- list()
+    if (shuffle) {
+        ranklen <- sample(m_clust_df$ranklen)
+    }
+    else
+    {
+        ranklen <- m_clust_df$ranklen
+    }    
+    for (c in cluster.ids) {
+        cluster.ranks[[c+1]] <- ranklen[which(m_clust_df$cluster %in% c(c))]
+    }
+    return(cluster.ranks)
+}
+```
+
+#### A function to allocate ranks to levels according to group membership
+		
+This iterates over clusters allocating ranks to each level.  Once a
+group is exhausted (i.e. there are no more tombs) we simply skip that
+group.  In this case we store the ranks in one list per level because
+we are actually interested in aggregate properties of ranks per level,
+i.e. we regard [1, 2, 3][4, 5, 6] and [2, 1, 3][6, 5, 4] as matches in
+the sense that they would have the same sum and/or mean.
+
+```{r}
+allocate.ranks.to.levels.by.cluster <- function (clusters, cluster.ranks, max.mustatils.per.cluster) {
+    ranks.in.levels <- list()
+    level <- 1
+    while (level <=  max.mustatils.per.cluster) {
+        tmp.ranks <- rep(NA, length(clusters$cid))
+        i <-  1
+        for (c in clusters$cid) {
+            if (clusters$nmustatils[c+1] >= level) {
+                                        # So there is at least one
+                                        # mustatil left in this group
+                tmp.ranks[i] <- cluster.ranks[[c+1]][level]
+                i <-  i + 1
+            }
+        }
+        ranks.in.levels[[level]] <- tmp.ranks
+        level <- level+1
+    }
+    return (ranks.in.levels)
+}
+```	
+
+#### A function to allocate ranks *ignoring* group membership
+
+```{r}
+allocate.ranks.to.levels.ignoring.cluster <- function(ranks.per.level.by.cluster, m_clust_df, max.mustatils.per.cluster) {
+    ranks.in.levels <- list()
+    level <- 1
+    total.allocated <- 0
+    global.rank <- 0
+    while (level <= max.mustatils.per.cluster) {
+        tmp.ranks <- rep(NA, nclusters)
+                                        # How many to allocate at this level
+                                        # to match expected
+        n.to.allocate <- length (ranks.per.level.by.cluster[[level]][which (! is.na(ranks.per.level.by.cluster[[level]]))])
+        total.allocated <- total.allocated + n.to.allocate
+        i <- 1
+        while (i <= n.to.allocate) {
+            global.rank <- global.rank + 1
+            tmp.ranks[i] <- m_clust_df$rank[global.rank]
+            i <- i + 1
+        }
+        ranks.in.levels[[level]] <- tmp.ranks
+        level <- level+1
+    }
+    return (ranks.in.levels)
+}
+```
+
+#### Functions to compute the sum and mean rank at each level
+
+```{r}
+sum.ranks.by.level <- function (ranks.by.level, nlevels) {
+    ranks.sums <- rep(1, nlevels, NA)
+    level <- 1
+    for (level in seq(1, nlevels, 1)) {
+        ranks.sums[level] <- sum (ranks.by.level[[level]], na.rm=T)
+    }
+    return (ranks.sums)
+}
+
+mean.ranks.by.level <- function (ranks.by.level, nlevels) {
+    ranks.means <- rep(1, nlevels, NA)
+    level <- 1
+    for (level in seq(1, nlevels, 1)) {
+        ranks.means[level] <- mean (ranks.by.level[[level]], na.rm=T)
+    }
+    return (ranks.means)
+}
+```
+
+## Size analysis 
+
+####Still code from Carrero Pazos et al.
+Obtain information about the number of clusters and the number of
+tombs per group.
+
+```{r results='hide'}
+nmustatils <- length(m_clust_df$x)
+
+clusters.id <- sort(unique(m_clust_df$cluster))
+nclusters <- length(clusters.id)
+clusters.hist <- hist(m_clust_df$cluster, breaks=seq(min(clusters.id)-0.5, max(clusters.id)+0.5, 1), plot=FALSE)
+plot(clusters.hist)
+clusters <- data.frame("cid"=clusters.id, "nmustatils"=clusters.hist$count)
+clusters$min.len <- sapply(clusters.id, function(x) min(mustatils$length[which(m_clust_df$cluster %in% c(x))]))
+clusters$mean.len <- sapply(clusters.id, function(x) mean(mustatils$length[which(m_clust_df$cluster %in% c(x))]))
+clusters$med.len <- sapply(clusters.id, function(x) median(mustatils$length[which(m_clust_df$cluster %in% c(x))]))
+clusters$max.len <- sapply(clusters.id, function(x) max(mustatils$length[which(m_clust_df$cluster %in% c(x))]))
+max.mustatils.per.cluster <- max(clusters$nmustatils)
+```
+cluster properties are as follows
+```{r}
+clusters
+```
+### Do the analysis
+
+First, prepare the volume ranks (in descending order) and find the ranks in each group.
+
+```{r results='hide'}
+m_clust_df$ranklen <- rank(-m_clust_df$length)
+ranks.by.cluster <- partition.ranks.by.cluster(clusters$cid, m_clust_df, FALSE)
+```
+
+Now consider the observed situation.  We allocate the top rank in each
+group to level 1, then the second rank in each group to level 2, and
+so on.
+
+```{r results='hide'}
+observed.ranks.per.level <- allocate.ranks.to.levels.by.cluster (clusters, ranks.by.cluster, max.mustatils.per.cluster)
+```
+Next, consider the ideal situation.  In other words, we allocate the
+top $N_1$ ranks to level 1, where $N$ is the number of groups which
+contribute to that level.  We then allocate the next $N$ ranks to
+level 2, where $N_2$ is the number of groups which contribute to that
+level, and so on.
+
+```{r results='hide'}
+ideal.ranks.per.level <- allocate.ranks.to.levels.ignoring.cluster (observed.ranks.per.level, m_clust_df, max.mustatils.per.cluster) 
+```
+Now collate some summary information.  Specifically, the sum of ranks
+and mean rank at each level under the two scenarios.
+
+```{r results='hide'}
+resultsB <- data.frame("level"=seq(1, max.mustatils.per.cluster, 1))
+resultsB$observed.sums <- sum.ranks.by.level (observed.ranks.per.level, max.mustatils.per.cluster)
+resultsB$observed.means <- mean.ranks.by.level (observed.ranks.per.level, max.mustatils.per.cluster)
+resultsB$ideal.sums <- sum.ranks.by.level (ideal.ranks.per.level, max.mustatils.per.cluster)
+resultsB$ideal.means <- mean.ranks.by.level (ideal.ranks.per.level, max.mustatils.per.cluster)
+```
+
+```{r echo=FALSE}
+resultsB
+
+```
+We learn from this that the allocation of mustatil lengths across groups
+is not *perfectly* hierarchical.  However, it is still worth
+considering whether the observed distribution of mean ranks per level
+is closer to the ideal distribution than might be expected by chance.
+We can examine this by re-labelling (randomly shuffling the mustatil
+lengths) and re-running the allocation of ranks to levels by cluster.
+
+```{r results='hide'}
+resultsB.sim.sums <- data.frame("level"=seq(1, max.mustatils.per.cluster, 1))
+resultsB.sim.means <- data.frame("level"=seq(1, max.mustatils.per.cluster, 1))
+nsims <- 999
+for (sim in seq(1, nsims, 1)) {
+    sim.ranks.by.cluster <- partition.ranks.by.cluster(clusters$cid, m_clust_df, TRUE)
+    sim.ranks.per.level <- allocate.ranks.to.levels.by.cluster (clusters, sim.ranks.by.cluster, max.mustatils.per.cluster)
+    command <- paste ("resultsB.sim.sums$s", sim, " <- sum.ranks.by.level(sim.ranks.per.level, max.mustatils.per.cluster)", sep="")
+    eval(parse(text=command))
+    command <- paste ("resultsB.sim.means$s", sim, " <- mean.ranks.by.level (sim.ranks.per.level, max.mustatils.per.cluster)", sep="")
+    eval(parse(text=command))
+}
+```
+
+We can now find out how the observed mean ranks at each level compare
+to the simulated mean ranks at each level.  One way to do this is to
+compute the rank of the observed mean ranks among the simulated mean
+ranks.
+
+```{r results='hide'}
+nlevels <- length(resultsB.sim.means$s1)
+tmp.rank.observed <- rep(NA, nlevels)
+tmp.min.rank.sims <- rep(NA, nlevels)
+tmp.pval <- rep(NA, nlevels)
+for (level in seq(1, nlevels, 1)) {
+    tmp.rank.observed[level] <- rank(c(resultsB$observed.means[level], as.numeric(resultsB.sim.means[level, 2:(nsims+1)])))[1]
+    tmp.pval[level] <- tmp.rank.observed[level] / (nsims + 1)
+    tmp.min.rank.sims[level] <- min(as.numeric(resultsB.sim.means[level, 2:(nsims+1)]))
+}
+resultsB$observed.rank.among.sims <- tmp.rank.observed
+resultsB$pval <- tmp.pval
+resultsB$min.rank.among.sims <- tmp.min.rank.sims
+rm(tmp.rank.observed, tmp.min.rank.sims, tmp.pval)
+```
+
+```{r echo=FALSE}
+resultsB[,c(1,6,7)]
+
+write_csv(resultsB, "outputs/rank_hierarchy_results.csv")
+```
+Plot the results nicely following Riris et al. 2020
+
+```{r}
+library(RColorBrewer)
+library(ggforce)
+library(ggpubr)
+getPalette = colorRampPalette(brewer.pal(16, "Accent"))
+
+ggclusters <- ggplot(data = groups, aes(x = X, y = Y)) + 
+  geom_point(data=noise, aes(x = X, y = Y), size=1, color="black") +
+  coord_fixed() + theme_bw() + xlab("Longitude") + ylab("Latitude") +
+  scale_fill_manual(values = getPalette(15)) +
+  scale_color_manual(values = getPalette(15)) +
+  guides(fill=guide_legend(nrow=2, title="Cluster")) + 
+  geom_mark_hull(aes(fill=as.factor(cluster)), expand=unit(2, "mm"), radius=unit(2, "mm")) +
+  geom_point(size=2.5, pch=1, stroke=1.25, aes(color=as.factor(cluster)), show.legend = FALSE) +
+  theme(axis.text.y = element_text(angle = 90, hjust=1), 
+        legend.position="bottom")
+plot(ggclusters)
+m_clust_df_no_noise <- m_clust_df %>% dplyr::filter(cluster != 0)
+ghist <- ggplot(m_clust_df_no_noise,aes(x=m_clust_df_no_noise$cluster)) + 
+  geom_bar() +
+  theme_bw() +
+  ylab("Mustatil count") + xlab("Cluster") +
+  scale_x_continuous(labels = seq(1,15,1), breaks=seq(1,15,1), expand = c(0.02, 0.02)) +
+  scale_y_continuous(expand = c(0.04, 0.04))+
+  theme_bw()
+plot(ghist)
+
+
+rankings <- resultsB
+gdiff <- ggplot(rankings) +
+  geom_point(aes(rankings$level, rankings$ideal.sums), col="#549256", pch=1, stroke=1.5) +
+  geom_point(aes(rankings$level, rankings$observed.sums), col="#e2848e", pch=20, size=3) +
+  geom_segment(aes(x=rankings$level, y=rankings$ideal.sums, 
+                   xend=rankings$level, yend=rankings$observed.sums),
+               linetype="dashed") +
+  xlab("Size level") + ylab("Rank sum") + theme_bw()
+pdf(file = "plots/clusters.pdf", width =4, height =4)
+plot(ggclusters)
+dev.off()
+
+pdf(file = "plots/size_hierarchy_clusters_plots.pdf")
+ggarrange(mcorr_1, ggclusters, ghist, gdiff, ncol=2, nrow=2, labels=c("A", "B", "C", "D"))
+dev.off()
+```
+#Viewsheds
+```{r}
+#get values for mustatils and background 
+coords <- as.data.frame(st_coordinates(sites))
+coordinates(coords) <- ~X+Y
+#vshed 3
+grid_3 <- as.im(as(n_vshed_3, "SpatialGridDataFrame"))
+
+sample_3 <- raster::extract(n_vshed_3, sites)
+sample_3 <- sample_3[!is.na(sample_3)]
+bg_3 <- grid_3$v
+
+#vshed 4
+grid_4 <- as.im(as(n_vshed_4, "SpatialGridDataFrame"))
+
+sample_4 <- raster::extract(n_vshed_4, sites)
+sample_4 <- sample_4[!is.na(sample_4)]
+bg_4 <- grid_4$v
+
+#vshed 7
+grid_7 <- as.im(as(n_vshed_7, "SpatialGridDataFrame"))
+
+sample_7 <- raster::extract(n_vshed_7, sites)
+sample_7 <- sample_7[!is.na(sample_7)]
+bg_7 <- grid_7$v
+
+#vshed10
+#vshed 7
+grid_10 <- as.im(as(n_vshed_10, "SpatialGridDataFrame"))
+
+sample_10 <- raster::extract(n_vshed_10, sites)
+sample_10 <- sample_10[!is.na(sample_10)]
+bg_10 <- grid_10$v
+
+#KS
+
+ks.test(sample_3, bg_3)
+pdf(width=6, height=5, file = "plots/vshed_3_boxplot.pdf")
+boxplot(sample_3, bg_3, names=c("Site locations", "Background"), col="#2e6d8e", jitter=TRUE)
+dev.off()
+
+sample_3 %>% 
+  ggplot(sample_3, aes(y=))+
+  geom_boxplot()
+
+ks.test(sample_4, bg_4)
+boxplot(sample_4, bg_4, names=c("Site locations", "Background"))
+
+ks.test(sample_7, bg_7)
+boxplot(sample_7, bg_7, names=c("Site locations", "Background"))
+
+ks.test(sample_10, bg_10)
+boxplot(sample_10, bg_10, names=c("Site locations", "Background"))
+```
+
+#Map of study area for figure 1
+
+```{r fig 1}
+world_vec <- ne_download(scale = "medium", type="countries", category="cultural", returnclass = "sf")
+```
+
+
+
+
+
+
+

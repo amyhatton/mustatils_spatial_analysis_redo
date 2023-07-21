@@ -1,0 +1,175 @@
+Import the study area extent to get the bounding box
+
+```{r}
+library(sf)
+
+study_area <- st_read("data/projected_utm37n/study_area_straightened.gpkg")
+st_bbox(study_area)
+```
+
+The FABDEM data is downloaded as folders per 10x10 degrees, which contain files for each 1x1 degree square. I've already separated the 12 files we need (by looking at the data in qgis) and put them in separate folder
+
+Read them in while also merging them:
+
+```{r}
+install.packages("terra")
+library(tidyverse)
+library(stringr)
+library(rgdal)
+library(terra)
+
+
+mergeList <- function(rasList){
+  #Internal function to make a list of raster objects from list of files.
+  ListRasters <- function(list_names) {
+    raster_list <- list() # initialise the list of rasters
+    for (i in 1:(length(list_names))){ 
+      grd_name <- list_names[i] # list_names contains all the names of the images in .grd format
+      raster_file <- raster::raster(grd_name)
+    }
+    raster_list <- append(raster_list, raster_file) # update raster_list at each iteration
+  }
+  
+  #convert every raster path to a raster object and create list of the results
+  raster.list <-sapply(rasList, FUN = ListRasters)
+  
+  # edit settings of the raster list for use in do.call and mosaic
+  names(raster.list) <- NULL
+  #####This function deals with overlapping areas
+  raster.list$fun <- sum
+  
+  #run do call to implement merge over the list of raster objects.
+  mos <- do.call(raster::merge, raster.list)
+  
+  #set crs of output
+  crs(mos) <- crs(x = raster(rasList[1]))
+  
+  return(mos)
+}
+
+#use the function on the raster files 
+raster_files <- list.files(path ="data/dem's/FABDEM_S_nefud",pattern = ".tif$",full.names = TRUE )
+fabdem <- mergeList(raster_files)
+
+#crop to study area
+e <- extent(study_area)
+fabdem_cropped <- crop(fabdem, e )
+plot(fabdem_cropped)
+writeRaster(fabdem_cropped, "data/dem's/fabdem_cropped.tif", overwrite = TRUE)
+```
+
+Read in the cop30dem and map both layers
+
+```{r}
+cop_dem30 <- raster("data/dem's/rasters_COP30/output_COP30_15km.tif")
+cop_dem30_5km <- raster("data/dem's/rasters_COP30/output_COP30_5km_buffer.tif")
+library(tmap)
+tmap_mode("view")
+tm_shape(fabdem_cropped)+
+  tm_raster(style = "cont", palette = "PuOr", legend.show = TRUE)+
+  tm_shape(cop_dem30)+
+  tm_raster(style = "cont", palette = "PuOr", legend.show = TRUE)+
+  tm_scale_bar()
+
+utm37n <- CRS("+init=epsg:32637")
+#can't use projectRaster because it uses too much memory. Need to use gdalUtils gdalwarp - BUT- gdalUtils is not available for this version of R (need to use an older version)
+cop_dem_proj <- projectRaster(cop_dem30, crs=utm37n, res=30)
+study_area_buff <- st_buffer(study_area, 5000, endCapStyle = "SQUARE", joinStyle = "MITRE", mitreLimit = 3)
+cop_dem_5km_proj <- projectRaster(cop_dem30_5km, crs=utm37n, res=30)
+writeRaster(cop_dem_proj ,"data/projected_utm37n/cop_dem30_15km_utm37n.tiff")
+cop_dem <- raster("data/projected_utm37n/cop_dem30_utm37n.tif")
+plot(cop_dem)
+st_write(study_area_buff, "data/projected_utm37n/study_area_straightened_5km.gpkg")
+```
+
+Decided to just use the COP DEM30 because there are not may buildings or vegetation and the FABDEM was flattening the slopes of jebels (used raster calculator and compared the difference map in qgis)
+
+DEM derivatives calculation
+TRI and TPI
+```{r}
+#read in the utm37n 5km buffer of dem
+dem <- rast("data/projected_utm37n/copdem30_5km_straight.tif")
+
+#tri<- terrain(x = dem, opt = c("slope","aspect",  "tpi"), neighbors = 4)
+
+ter.par[tpi]
+
+tpi <- terrain(x = dem, v = "TPI", neighbors = 8)
+plot(tpi)
+#use raster::terrain to calucltae tri and tpi
+#queens case neighbourhood
+f_3<- matrix(1, nrow=3, ncol=3)
+f_5<- matrix(1, nrow=5, ncol=5)
+f_15<- matrix(1, nrow=15, ncol=15)
+x <- dem
+
+#calculating it with focal so you can have different sized windows
+f <- matrix(1, nrow=3, ncol=3)
+
+TRI <- focal(x, w=f, fun=function(x, ...) sum(abs(x[-5]-x[5]))/8)
+TPI <- focal(x, w=f, fun=function(x, ...) x[5] - mean(x[-5]))
+rough <- focal(x, w=f, fun=function(x, ...) max(x) - min(x), na.rm=TRUE)
+
+tr_3 <- focal(x, w=f_3, fun=function(x, ...) sum(abs(x[-5]-x[5]))/8)
+tr_5 <- focal(x, w=f_5, fun=function(x, ...) sum(abs(x[-5]-x[5]))/8)
+tr_15 <- focal(x, w=f_15, fun=function(x, ...) sum(abs(x[-5]-x[5]))/8)
+
+#need to convert to spatraster - think it used raster::focal, not terra::focal
+tr_3_spat <- rast(tr_3)
+tr_5_spat <- rast(tr_5)
+tr_15_spat <- rast(tr_15)
+#stack them
+tri_stack <- c(tr_3_spat, tr_5_spat, tr_15_spat)
+#set their names
+#maybe do this instead?
+x <- rast(tri_stack)
+names(tri_stack) <- c("tri_3", "tri_5", "tri_15")
+#export the stack 
+terra::writeRaster(tri_stack, "data/projected_utm37n/tri_stack.tif")
+
+#read back in as a rasterbrick
+y <- raster::brick("data/projected_utm37n/tri_stack.tif") 
+
+#writeRaster(tri, "data/projected_utm37n/tri.tif")
+
+tpi_3 <- terra::focal(x, w=f_3, fun=function(x, ...) x[5] - mean(x[-5]))
+tpi_5 <- terra::focal(x, w=f_5, fun=function(x, ...) x[5] - mean(x[-5]))
+tpi_15 <- terra::focal(x, w=f_15, fun=function(x, ...) x[5] - mean(x[-5]))
+
+#stack them
+tpi_3_spat <- rast(tpi_3)
+tpi_5_spat <- rast(tpi_5)
+tpi_15_spat <- rast(tpi_15)
+tpi_stack <- c(tpi_3_spat, tpi_5_spat, tpi_15_spat)
+#set their names
+
+names(tpi_stack) <- c("tpi_3", "tpi_5", "tpi_15")
+#export the stack 
+terra::writeRaster(tpi_stack, "data/projected_utm37n/tpi_stack.tif")
+
+#Terrain roughness
+rough_3 <- terrain(x = dem, v= "roughness", neighbors = 8)
+rough_5 <- terra::focal(x, w=f_5, fun=function(x, ...) max(x) - min(x), na.rm=TRUE)
+rough_15 <- terra::focal(x, w=f_15, fun=function(x, ...) max(x) - min(x), na.rm=TRUE)
+
+r_stack <- c(rough_3, rough_5, rough_15)
+#set their names
+#maybe do this instead?
+x <- rast(r_stack)
+names(r_stack) <- c("rough_3", "rough_5", "rough_15")
+#export the stack 
+terra::writeRaster(r_stack, "data/projected_utm37n/roughness_stack.tif")
+
+y <- rast("data/projected_utm37n/roughness_stack.tif")
+names(y)
+plot(y$rough_3)
+```
+Rasterise Geo maps
+```{r}
+geo <- st_read("../../saudi_geological_maps/Geology_souther_nefud_final.sqlite")
+geo1 <- geo$abbreviation
+geo1<- geo[, c("abbreviation")]
+geo_rast <- st_rasterize(geo1%>% dplyr::select(abbreviation, GEOMETRY))
+plot(geo_rast)
+```
+
