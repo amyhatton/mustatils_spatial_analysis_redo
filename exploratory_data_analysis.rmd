@@ -34,6 +34,7 @@ dist_deposits_rivers <- raster("data/cleaned_data/rast/dist_deposits_rivers.tif"
 dist_sandstone_geo <- raster("data/cleaned_data/rast/dist_sandstone_geo.tif")
 dist_non_quart_geo <- raster("data/cleaned_data/rast/dist_non_quart_geo.tif")
 viewshed <- raster("data/cleaned_data/rast/t_vshed_whole_scaled.tif")
+pekel_water <- raster("data/projected_utm37n/pekel_mask.tif")
 ```
 Look at the orientation data of mustatils
 ```{r}
@@ -186,6 +187,13 @@ plot(viewshed , main="Viewshed", axes=FALSE)
 plot(mustatils, add=TRUE)
 hist(viewshed, main="",xlab="Viewshed", ylab="cell count", maxpixels=10000000)
 par(mfrow=c(1,1))
+
+#Pekel water
+par(mfrow=c(2,1))
+plot(pekel_water , main="Water Occurence", axes=FALSE)
+plot(mustatils, add=TRUE)
+hist(pekel_water, main="",xlab="Water Occurence", ylab="cell count", maxpixels=10000000)
+par(mfrow=c(1,1))
 ```
 2) look at relationship between variables and sites
 (doing eastness and northness instead of aspect)
@@ -218,7 +226,7 @@ r = list(slope,tpi_stack$tpi_3, tpi_stack$tpi_5,
          tri_stack$tri_3, tri_stack$tri_5, tri_stack$tri_15,
          roughness_stack$rough_3, roughness_stack$rough_5,roughness_stack$rough_15,
          dem,dist_rivers,dist_sandstone_geo,dist_non_quart_geo,
-          viewshed,  eastness)
+          viewshed,  eastness, pekel_water)
 
 #list of independent + good predictive variables
 r = list(tpi_stack$tpi_3, tpi_stack$tpi_5, 
@@ -247,7 +255,7 @@ for (i in 1:length(rr)){
 #convert back to raster (from spatraster)
 rf<- lapply(rs, raster)
 #finally get covariates stack
-covariates <- stack(rf)
+covariates <- rast(rs)
 
 #rename to make sure they're right
 
@@ -291,7 +299,9 @@ sites <- m_points %>%
 #merge sites and non sites
 all_sites <- rbind(sites, non_sites)
 
-locvals_all_sites <- data.frame(raster::extract(covariates, all_sites))
+all_sites_v <- vect(all_sites)
+
+locvals_all_sites <- data.frame(terra::extract(covariates, all_sites_v))
 locvals_all_sites$site <- as.numeric(as.character(all_sites$value))
 plot(locvals_all_sites)
 
@@ -429,7 +439,15 @@ hist(locvals_all_sites$eastness[locvals_all_sites$site==1], breaks=seq(-1,1,0.1)
 hist(locvals_all_sites$eastness[locvals_all_sites$site==0], breaks=seq(-1,1,0.1))
 par(mfrow=c(1,1))
 range(eastness)
+
 #northness - sites and non sites show same trend
+par(mfrow=c(2,1))
+hist(locvals_all_sites$northness[locvals_all_sites$site==1], breaks=seq(-1,1,0.1))
+hist(locvals_all_sites$northness[locvals_all_sites$site==0], breaks=seq(-1,1,0.1))
+par(mfrow=c(1,1))
+
+
+#Water occurence pekel data
 par(mfrow=c(2,1))
 hist(locvals_all_sites$northness[locvals_all_sites$site==1], breaks=seq(-1,1,0.1))
 hist(locvals_all_sites$northness[locvals_all_sites$site==0], breaks=seq(-1,1,0.1))
