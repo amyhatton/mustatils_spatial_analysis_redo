@@ -2,8 +2,9 @@ Import the study area extent to get the bounding box
 
 ```{r}
 library(sf)
+install.packages("terrainr")
 
-study_area <- st_read("data/projected_utm37n/study_area_straightened.gpkg")
+study_area <- st_read("data/projected_utm37n/study_area_straightened_5km.gpkg")
 st_bbox(study_area)
 ```
 
@@ -17,7 +18,7 @@ library(tidyverse)
 library(stringr)
 library(rgdal)
 library(terra)
-
+library(terrainr)
 
 mergeList <- function(rasList){
   #Internal function to make a list of raster objects from list of files.
@@ -83,6 +84,36 @@ st_write(study_area_buff, "data/projected_utm37n/study_area_straightened_5km.gpk
 ```
 
 Decided to just use the COP DEM30 because there are not may buildings or vegetation and the FABDEM was flattening the slopes of jebels (used raster calculator and compared the difference map in qgis)
+
+Read in and process the Pekel water data 
+
+```{r Processing Pekel data}
+#use the function on the raster files 
+raster_files <- list.files(path ="data/dem's/pekel_water_occurence_37years",pattern = ".tif$",full.names = TRUE )
+
+pekel <- merge_rasters(
+  raster_files,
+  output_raster = "data/dem's/pekel_water_occurence_37years/merged.tif"
+)
+
+pekel_merged <- terra::rast("data/dem's/pekel_water_occurence_37years/merged.tif")
+
+study_area_buff <- st_buffer(study_area, 5000)
+study_area_wgs84 <- st_transform(study_area_buff, 4326)
+#crop to study area
+pekel_cropped <- terra::crop(pekel_merged, study_area_wgs84)
+pekel_cropped_utm37 <- project(pekel_cropped, "epsg:32637")
+
+pekel_cropped_straight <- terra::crop(pekel_cropped_utm37, study_area)
+plot(pekel_cropped_straight)
+
+#create a mask so we only have occurence data (1 = there was water, 0 there was never water)
+#Do this by dividing the raster by itself
+class_1_pekel <- pekel_cropped_straight/pekel_cropped_straight
+plot(class_1_pekel)
+
+writeRaster(class_1_pekel, "data/projected_utm37n/pekel_mask.tif", overwrite = TRUE)
+```
 
 DEM derivatives calculation
 TRI and TPI
