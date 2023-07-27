@@ -34,7 +34,8 @@ dist_deposits_rivers <- raster("data/cleaned_data/rast/dist_deposits_rivers.tif"
 dist_sandstone_geo <- raster("data/cleaned_data/rast/dist_sandstone_geo.tif")
 dist_non_quart_geo <- raster("data/cleaned_data/rast/dist_non_quart_geo.tif")
 viewshed <- raster("data/cleaned_data/rast/t_vshed_whole_scaled.tif")
-pekel_water <- raster("data/projected_utm37n/pekel_mask.tif")
+dist_pekel_water <- raster("data/projected_utm37n/dist_pekel_mask.tif")
+names(dist_pekel_water) <- "dist_pekel_water"
 ```
 Look at the orientation data of mustatils
 ```{r}
@@ -220,13 +221,13 @@ r = list(slope,aspect,tpi_stack$tpi_3, tpi_stack$tpi_5, tpi_stack$tpi_15,
          tri_stack$tri_3, tri_stack$tri_5, tri_stack$tri_15,
          roughness_stack$rough_3, roughness_stack$rough_5,roughness_stack$rough_15,
          dem,dist_rivers,dist_deposits,dist_lakes_rivers,dist_deposits_rivers,
-         dist_sandstone_geo,dist_non_quart_geo,dist_lakes, viewshed, northness, eastness)
+         dist_sandstone_geo,dist_non_quart_geo,dist_lakes, viewshed, northness, eastness, dist_pekel_water)
 #list of variable with good predictive power
 r = list(slope,tpi_stack$tpi_3, tpi_stack$tpi_5, 
          tri_stack$tri_3, tri_stack$tri_5, tri_stack$tri_15,
          roughness_stack$rough_3, roughness_stack$rough_5,roughness_stack$rough_15,
          dem,dist_rivers,dist_sandstone_geo,dist_non_quart_geo,
-          viewshed,  eastness, pekel_water)
+          viewshed,  eastness, dist_pekel_water)
 
 #list of independent + good predictive variables
 r = list(tpi_stack$tpi_3, tpi_stack$tpi_5, 
@@ -235,12 +236,15 @@ r = list(tpi_stack$tpi_3, tpi_stack$tpi_5,
 #r = list(aspect,tpi,dist_lakes_rivers,
                     #dist_non_quart_geo)
 rr <- lapply(r, rast)
+#get the extent of the first raster in the list
 r1 <- rast(res=30, ext = ext(rr[[1]]))
 
+#rename the variable
 standard <- r1
-rs <- list(standard)
+#Create a list where the resamples rasters will go
+rs <- list(r1)
 
-#not working do manually for now
+#iterate over the rasters and resample to make sure they have the same extent
 for (i in 1:length(rr)){
   rs[[i]] <- terra::resample(rr[[i]], standard, method='bilinear')
 }
@@ -254,10 +258,15 @@ for (i in 1:length(rr)){
 #rs[[1]] <- aspect
 #convert back to raster (from spatraster)
 rf<- lapply(rs, raster)
+
+#to keep as a spatraster stack
+#rf <- rast(list(rs)) 
+
 #finally get covariates stack
 covariates <- rast(rs)
 
-#rename to make sure they're right
+#check to see they've kept their names
+plot(covariates[[16]])
 
 #create some nonsite points
 non_site_area <- st_difference(study_area, st_union(mustatils))
@@ -301,12 +310,10 @@ all_sites <- rbind(sites, non_sites)
 
 all_sites_v <- vect(all_sites)
 
-locvals_all_sites <- data.frame(terra::extract(covariates, all_sites_v))
+locvals_all_sites <- data.frame(raster::extract(covariates, all_sites))
 locvals_all_sites$site <- as.numeric(as.character(all_sites$value))
-plot(locvals_all_sites)
 
 m_environ_data <- data.frame(raster::extract(covariates,m_points_c))
-
 ```
 
 ## Histograms of values of locvals for sites and non-sites
@@ -326,40 +333,44 @@ par(mfrow=c(1,1))
 #slope - mustatils slightly more spread out (occur on high slope (30 degrees))
 #but not difference enough to be good predictor
 par(mfrow=c(2,1))
-hist(locvals_all_sites$slope[locvals_all_sites$site==1], breaks=seq(0,45,5))
-hist(locvals_all_sites$slope[locvals_all_sites$site==0], breaks=seq(0,45,5))
+hist(locvals_all_sites$slope[locvals_all_sites$site==1], breaks=seq(0,50,5))
+hist(locvals_all_sites$slope[locvals_all_sites$site==0], breaks=seq(0,50,5))
 par(mfrow=c(1,1))
 range(locvals_all_sites$slope)
 #tpi3- looks good skewed to more  positive values for mustatils
 par(mfrow=c(2,1))
-hist(locvals_all_sites$tpi_3[locvals_all_sites$site==1], breaks=seq(-10,10,1))
-hist(locvals_all_sites$tpi_3[locvals_all_sites$site==0], breaks=seq(-10,10,1))
+hist(locvals_all_sites$tpi_3[locvals_all_sites$site==1], breaks=seq(-10,13,1))
+hist(locvals_all_sites$tpi_3[locvals_all_sites$site==0], breaks=seq(-10,13,1))
 par(mfrow=c(1,1))
+range(locvals_all_sites$tpi_3)
 
 #tpi5- looks good skewed to more  negative values for mustatils
 par(mfrow=c(2,1))
-hist(locvals_all_sites$tpi_5[locvals_all_sites$site==1], breaks=seq(-50,50,10))
-hist(locvals_all_sites$tpi_5[locvals_all_sites$site==0], breaks=seq(-50,50,10))
+hist(locvals_all_sites$tpi_5[locvals_all_sites$site==1], breaks=seq(-70,50,10))
+hist(locvals_all_sites$tpi_5[locvals_all_sites$site==0], breaks=seq(-70,50,10))
 par(mfrow=c(1,1))
+range(locvals_all_sites$tpi_5)
 
 #tpi15- not great predictor, skewed slighty negative for mustatils
 par(mfrow=c(2,1))
-hist(locvals_all_sites$tpi_15[locvals_all_sites$site==1], breaks=seq(-80,110,10))
-hist(locvals_all_sites$tpi_15[locvals_all_sites$site==0], breaks=seq(-80,110,10))
+hist(locvals_all_sites$tpi_15[locvals_all_sites$site==1], breaks=seq(-100,80,10))
+hist(locvals_all_sites$tpi_15[locvals_all_sites$site==0], breaks=seq(-100,80,10))
 par(mfrow=c(1,1))
+range(locvals_all_sites$tpi_15)
 
 #tri3- mustatils skewed to higher values - not much of a differnect though
 par(mfrow=c(2,1))
-hist(locvals_all_sites$tri_3[locvals_all_sites$site==1], breaks=seq(0,20,1))
-hist(locvals_all_sites$tri_3[locvals_all_sites$site==0], breaks=seq(0,20,1))
+hist(locvals_all_sites$tri_3[locvals_all_sites$site==1], breaks=seq(0,30,1))
+hist(locvals_all_sites$tri_3[locvals_all_sites$site==0], breaks=seq(0,30,1))
 par(mfrow=c(1,1))
+range(locvals_all_sites$tri_3)
 
 #tri5- mustatils skewed to hiher values - not much of a differnect though
 par(mfrow=c(2,1))
-hist(locvals_all_sites$tri_5[locvals_all_sites$site==1], breaks=seq(0,150,5))
-hist(locvals_all_sites$tri_5[locvals_all_sites$site==0], breaks=seq(0,150,5))
+hist(locvals_all_sites$tri_5[locvals_all_sites$site==1], breaks=seq(0,200,5))
+hist(locvals_all_sites$tri_5[locvals_all_sites$site==0], breaks=seq(0,200,5))
 par(mfrow=c(1,1))
-range(locvals_all_sites$tri_15)
+range(locvals_all_sites$tri_5)
 #tri15- mustatils skewed to hiher values - not much of a differnect though
 par(mfrow=c(2,1))
 hist(locvals_all_sites$tri_15[locvals_all_sites$site==1], breaks=seq(0,2900,100))
@@ -368,15 +379,16 @@ par(mfrow=c(1,1))
 
 #roughness3- mustatils skewed to higher values - not much of a differnect though
 par(mfrow=c(2,1))
-hist(locvals_all_sites$rough_3[locvals_all_sites$site==1], breaks=seq(0,55,5))
-hist(locvals_all_sites$rough_3[locvals_all_sites$site==0], breaks=seq(0,55,5))
+hist(locvals_all_sites$rough_3[locvals_all_sites$site==1], breaks=seq(0,70,5))
+hist(locvals_all_sites$rough_3[locvals_all_sites$site==0], breaks=seq(0,70,5))
 par(mfrow=c(1,1))
-
+range(locvals_all_sites$rough_3)
 #roughness5- mustatils skewed to hiher values - not much of a differnect though
 par(mfrow=c(2,1))
-hist(locvals_all_sites$rough_5[locvals_all_sites$site==1], breaks=seq(0,105,5))
-hist(locvals_all_sites$rough_5[locvals_all_sites$site==0], breaks=seq(0,105,5))
+hist(locvals_all_sites$rough_5[locvals_all_sites$site==1], breaks=seq(0,120,5))
+hist(locvals_all_sites$rough_5[locvals_all_sites$site==0], breaks=seq(0,120,5))
 par(mfrow=c(1,1))
+range(locvals_all_sites$rough_15)
 
 #roughness15- mustatils skewed to hiher values - not much of a differnect though
 par(mfrow=c(2,1))
@@ -403,23 +415,23 @@ par(mfrow=c(1,1))
 
 #dist lakes_rivers  - looks close - mustatils more bunched at small distances
 par(mfrow=c(2,1))
-hist(locvals_all_sites$dist_lakes_rivers [locvals_all_sites$site==1], breaks=seq(0,20000,1000))
-hist(locvals_all_sites$dist_lakes_rivers [locvals_all_sites$site==0], breaks=seq(0,20000,1000))
+hist(locvals_all_sites$dist_lakes_rivers [locvals_all_sites$site==1], breaks=seq(0,22000,1000))
+hist(locvals_all_sites$dist_lakes_rivers [locvals_all_sites$site==0], breaks=seq(0,22000,1000))
 par(mfrow=c(1,1))
-
+range(locvals_all_sites$dist_deposits_rivers.PERMANENT)
 #dist deposits rivers similar to lakes rivers also looks good
 par(mfrow=c(2,1))
-hist(locvals_all_sites$dist_deposits_rivers[locvals_all_sites$site==1], breaks=seq(0,20000,1000))
-hist(locvals_all_sites$dist_deposits_rivers[locvals_all_sites$site==0], breaks=seq(0,20000,1000))
+hist(locvals_all_sites$dist_deposits_rivers[locvals_all_sites$site==1], breaks=seq(0,22000,1000))
+hist(locvals_all_sites$dist_deposits_rivers[locvals_all_sites$site==0], breaks=seq(0,22000,1000))
 par(mfrow=c(1,1))
 
 #dist sandstone geo mustatils mostly clustered in first km
 par(mfrow=c(2,1))
-hist(locvals_all_sites$dist_sandstone_geo[locvals_all_sites$site==1], breaks=seq(0,53000,1000))
-hist(locvals_all_sites$dist_sandstone_geo[locvals_all_sites$site==0], breaks=seq(0,53000,1000))
+hist(locvals_all_sites$dist_sandstone_geo[locvals_all_sites$site==1], breaks=seq(0,55000,1000))
+hist(locvals_all_sites$dist_sandstone_geo[locvals_all_sites$site==0], breaks=seq(0,55000,1000))
 par(mfrow=c(1,1))
-
 range(locvals_all_sites$dist_sandstone_geo)
+
 #dist non quart geo - very good 
 par(mfrow=c(2,1))
 hist(locvals_all_sites$dist_non_quart_geo[locvals_all_sites$site==1], breaks=seq(0,60000,1000))
@@ -449,9 +461,10 @@ par(mfrow=c(1,1))
 
 #Water occurence pekel data
 par(mfrow=c(2,1))
-hist(locvals_all_sites$northness[locvals_all_sites$site==1], breaks=seq(-1,1,0.1))
-hist(locvals_all_sites$northness[locvals_all_sites$site==0], breaks=seq(-1,1,0.1))
+hist(locvals_all_sites$dist_pekel_water[locvals_all_sites$site==1], breaks=seq(0, 65000,1000))
+hist(locvals_all_sites$dist_pekel_water[locvals_all_sites$site==0], breaks=seq(0, 65000,1000))
 par(mfrow=c(1,1))
+range(locvals_all_sites$dist_pekel_water)
 ```
 
 ## Create univariate models to check predictive power

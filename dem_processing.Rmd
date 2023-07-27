@@ -4,7 +4,7 @@ Import the study area extent to get the bounding box
 library(sf)
 install.packages("terrainr")
 
-study_area <- st_read("data/projected_utm37n/study_area_straightened_5km.gpkg")
+study_area <- st_read("data/projected_utm37n/study_area_straightened.gpkg")
 st_bbox(study_area)
 ```
 
@@ -56,7 +56,7 @@ fabdem <- mergeList(raster_files)
 e <- extent(study_area)
 fabdem_cropped <- crop(fabdem, e )
 plot(fabdem_cropped)
-writeRaster(fabdem_cropped, "data/dem's/fabdem_cropped.tif", overwrite = TRUE)
+writeRaster(fabdem_cropped, "data/dem's/fabdem_cropped.tif", overwrite = FALSE)
 ```
 
 Read in the cop30dem and map both layers
@@ -90,11 +90,6 @@ Read in and process the Pekel water data
 ```{r Processing Pekel data}
 #use the function on the raster files 
 raster_files <- list.files(path ="data/dem's/pekel_water_occurence_37years",pattern = ".tif$",full.names = TRUE )
-
-pekel <- merge_rasters(
-  raster_files,
-  output_raster = "data/dem's/pekel_water_occurence_37years/merged.tif"
-)
 
 pekel_merged <- terra::rast("data/dem's/pekel_water_occurence_37years/merged.tif")
 
