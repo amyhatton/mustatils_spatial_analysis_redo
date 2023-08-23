@@ -6,6 +6,7 @@ output: html_document
 ---
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
+install.packages(c("tidyverse", "raster", "sf","maptools", "terra", "tmap", "spatstat", "stars"))
 library(tidyverse)
 library(raster)
 library(sf)
@@ -246,12 +247,19 @@ r1 <- rast(res=30, ext = ext(rr[[1]]))
 #rename the variable
 standard <- r1
 #Create a list where the resamples rasters will go
-rs <- list(r1)
+rresamp <- list(r1)
 
 #iterate over the rasters and resample to make sure they have the same extent
 for (i in 1:length(rr)){
-  rs[[i]] <- terra::resample(rr[[i]], standard, method='bilinear')
+  rresamp[[i]] <- terra::resample(rr[[i]], standard, method='bilinear')
 }
+
+#standardise the variables to see if it helps with collinearity
+
+for (i in 1:length(rs)){
+  rs[[i]] <- terra::scale(rs[[i]], scale = T)
+}
+
 #rs[[20]]
 #dfist to geo layers aren't named in the list - don't know why  but just fix here so we know what each layer is later
 
