@@ -858,6 +858,7 @@ g <- getglmfit(ppm_mod1)
 library(faraway)
 library(car)
 faraway::vif(g)
+car::vif(g)
 
 pdf(width=9, height=7, file = "plots/analysis_redo/pcf_first_order_zoomed_999sim.pdf")
 plot(pcf_mod1,xlim=c(0,10000), ylim=c(0,100), legend=FALSE, main="First-order model")
