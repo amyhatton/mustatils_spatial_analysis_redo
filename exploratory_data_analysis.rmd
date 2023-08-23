@@ -247,18 +247,18 @@ r1 <- rast(res=30, ext = ext(rr[[1]]))
 #rename the variable
 standard <- r1
 #Create a list where the resamples rasters will go
-rresamp <- list(r1)
+rs <- list(r1)
 
 #iterate over the rasters and resample to make sure they have the same extent
 for (i in 1:length(rr)){
-  rresamp[[i]] <- terra::resample(rr[[i]], standard, method='bilinear')
+  rs[[i]] <- terra::resample(rr[[i]], standard, method='bilinear')
 }
 
-#standardise the variables to see if it helps with collinearity
-
-for (i in 1:length(rs)){
-  rs[[i]] <- terra::scale(rs[[i]], scale = T)
-}
+#standardise the variables to see if it helps with collinearity - didn't work
+#rs <- list(r1)
+#for (i in 1:length(rresamp)){
+  #rs[[i]] <- terra::scale(rresamp[[i]], scale = T)
+#}
 
 #rs[[20]]
 #dfist to geo layers aren't named in the list - don't know why  but just fix here so we know what each layer is later
@@ -486,114 +486,114 @@ library(lmtest)
 #slope
 slope.m <- glm(site~slope.PERMANENT, data = locvals_all_sites, family=binomial(logit))
 summary(slope.m)
-lrtest(slope.m) #very good lrt pvalue of 3.162e-06 ***
+lrtest(slope.m) #very good lrt pvalue of 3.162e-06 *** ; standardised pvalue 0.0005068 ***
 
 #aspect
 aspect.m <- glm(site~aspect.PERMANENT, data = locvals_all_sites, family=binomial(logit))
 summary(aspect.m)
-lrtest(aspect.m) #very good pvalue < 2.2e-16 ***
+lrtest(aspect.m) #very good pvalue < 2.2e-16 ***; standardised pvalue 
 
 #eastness 
 eastness.m <- glm(site~eastness, data = locvals_all_sites, family=binomial(logit))
 summary(eastness.m)
-lrtest(eastness.m) #very good pvalue 2.2e-16 *** 
+lrtest(eastness.m) #very good pvalue 2.2e-16 *** ; standardised pvalue 2.2e-16 ***
 
 #northness
 northness.m <- glm(site~northness, data = locvals_all_sites, family=binomial(logit))
 summary(northness.m)
-lrtest(northness.m) #bad p value 0.09371
+lrtest(northness.m) #bad p value 0.09371; standardised pvalue 
 
 #tpi
 tpi3.m <- glm(site~tpi_3, data = locvals_all_sites, family=binomial(logit))
 summary(tpi3.m)
-lrtest(tpi3.m) #very good pvalue 2.2e-16 ***
+lrtest(tpi3.m) #very good pvalue 2.2e-16 ***; standardised pvalue < 2.2e-16 ***
 
 #tpi
 tpi5.m <- glm(site~tpi_5, data = locvals_all_sites, family=binomial(logit))
 summary(tpi5.m)
-lrtest(tpi5.m) #very good p-value 2.4e-12 ***
+lrtest(tpi5.m) #very good p-value 2.4e-12 ***; standardised pvalue < 2.2e-16 ***
 
 #tpi
 tpi15.m <- glm(site~tpi_15, data = locvals_all_sites, family=binomial(logit))
 summary(tpi15.m)
-lrtest(tpi15.m) #bad p-value 0.2751
+lrtest(tpi15.m) #bad p-value 0.2751; standardised pvalue 
 
 #tri
 tri3.m <- glm(site~tri_3, data = locvals_all_sites, family=binomial(logit))
 summary(tri3.m)
-lrtest(tri3.m) #very good pvalue 3.648e-07 ***
+lrtest(tri3.m) #very good pvalue 3.648e-07 ***; standardised pvalue 3.294e-05 ***
 
 #tri
 tri5.m <- glm(site~tri_5, data = locvals_all_sites, family=binomial(logit))
 summary(tri5.m)
-lrtest(tri5.m) #very good p-value 9.357e-10 ***
+lrtest(tri5.m) #very good p-value 9.357e-10 ***; standardised pvalue 2.119e-08 ***
 
 #tri
 tri15.m <- glm(site~tri_15, data = locvals_all_sites, family=binomial(logit))
 summary(tri15.m)
-lrtest(tri15.m) #very good p-value 3.598e-05 ***
+lrtest(tri15.m) #very good p-value 3.598e-05 ***; standardised pvalue 
 
 rough3.m <- glm(site~rough_3, data = locvals_all_sites, family=binomial(logit))
 summary(rough3.m)
-lrtest(rough3.m) #very good p-value 2.209e-07 ***
+lrtest(rough3.m) #very good p-value 2.209e-07 ***; standardised pvalue 
 
 rough5.m <- glm(site~rough_5, data = locvals_all_sites, family=binomial(logit))
 summary(rough5.m)
-lrtest(rough5.m) #very good p-value 2.167e-10 ***
+lrtest(rough5.m) #very good p-value 2.167e-10 ***; standardised pvalue 
 
 rough15.m <- glm(site~rough_15, data = locvals_all_sites, family=binomial(logit))
 summary(rough15.m)
-lrtest(rough15.m) #very good p-value 5.026e-09 ***
+lrtest(rough15.m) #very good p-value 5.026e-09 ***; standardised pvalue 
 
 #dist_lakes
 dist_lakes.m <- glm(site~dist_lakes.PERMANENT, data = locvals_all_sites, family=binomial(logit))
 summary(dist_lakes.m)
-lrtest(dist_lakes.m) #not good pvalue 0.8734
+lrtest(dist_lakes.m) #not good pvalue 0.8734; standardised pvalue 
 
 #dem
 dem.m <- glm(site~dem, data = locvals_all_sites, family=binomial(logit))
 summary(dem.m)
-lrtest(dem.m) # very good pvalue 2.628e-06 ***
+lrtest(dem.m) # very good pvalue 2.628e-06 ***; standardised pvalue 
 
 #dist_rivers
 dist_rivers.m <- glm(site~dist_rivers.PERMANENT, data = locvals_all_sites, family=binomial(logit))
 summary(dist_rivers.m)
-lrtest(dist_rivers.m) #very good pvalue 2.2e-16 ***
+lrtest(dist_rivers.m) #very good pvalue 2.2e-16 ***; standardised pvalue 
 
 #dist_deposits
 dist_deposits.m <- glm(site~dist_deposits.PERMANENT, data = locvals_all_sites, family=binomial(logit))
 summary(dist_deposits.m)
-lrtest(dist_deposits.m) #bad pvalue 0.6701
+lrtest(dist_deposits.m) #bad pvalue 0.6701; standardised pvalue 
 
 #dist_lakes_rivers 
 dist_lakes_rivers.m <- glm(site~dist_lakes_rivers.PERMANENT, data = locvals_all_sites, family=binomial(logit))
 summary(dist_lakes_rivers.m)
-lrtest(dist_lakes_rivers.m) #very good pvalue 2.91e-12 ***
+lrtest(dist_lakes_rivers.m) #very good pvalue 2.91e-12 ***; standardised pvalue 
 
 #dist_deposits_rivers
 dist_deposits_rivers.m <- glm(site~dist_deposits_rivers.PERMANENT, data = locvals_all_sites, family=binomial(logit))
 summary(dist_deposits_rivers.m)
-lrtest(dist_deposits_rivers.m) #very good pvalue 4.922e-13 ***
+lrtest(dist_deposits_rivers.m) #very good pvalue 4.922e-13 ***; standardised pvalue 
 
 #dist_sandstone_geo 
 dist_sandstone_geo.m <- glm(site~dist_sandstone_geo , data = locvals_all_sites, family=binomial(logit))
 summary(dist_sandstone_geo.m)
-lrtest(dist_sandstone_geo.m) #very good pvalue 2.2e-16 ***
+lrtest(dist_sandstone_geo.m) #very good pvalue 2.2e-16 ***; standardised pvalue 
 
 #dist_non_quart_geo 
 dist_non_quart_geo.m <- glm(site~dist_non_quart_geo , data = locvals_all_sites, family=binomial(logit))
 summary(dist_non_quart_geo.m)
-lrtest(dist_non_quart_geo.m) #very very good 2.2e-16 ***
+lrtest(dist_non_quart_geo.m) #very very good 2.2e-16 ***; standardised pvalue 
 
 #viewshed
 viewshed.m <- glm(site~t_vshed_whole_scaled, data=locvals_all_sites, family=binomial(logit))
 summary(viewshed.m)
-lrtest(viewshed.m) #very good pvalue < 2.2e-16 ***
+lrtest(viewshed.m) #very good pvalue < 2.2e-16 ***; standardised pvalue 
 
 #dist to pekel water
 pekel.m <- glm(site~dist_pekel_water, data=locvals_all_sites, family=binomial(logit))
 summary(pekel.m)
-lrtest(pekel.m) #very good pvalue < 2.2e-16 ***
+lrtest(pekel.m) #very good pvalue < 2.2e-16 ***; standardised pvalue 
 ```
 
 ### Univariate 
@@ -614,11 +614,14 @@ Going to incorporate the following variable as they seem to be good predictors:
 - distance to sandstone geo
 - dist to non quaternary geology
 - viewshed
--distance to
+- distance to
 
 #### Pearsons correlation
 
 Test for multicollinearity between variables
+
+Instead of assuming multicollinearity is an issue I have decided to rather test this later on in the process
+by using the variance inflation factor (VIF)
 ```{r}
 library(virtualspecies)
 removeCollinearity(covariates_rs, multicollinearity.cutoff = 0.75,
@@ -744,6 +747,24 @@ Variables that have good predictive power and are independent at cutoff 0.75 rou
 - "t_vshed_whole_scaled   
 - slope
 
+23.08 all variables that have predictive power - will check for collinearity afterwards using VIF
+- slope,
+- tpi_stack$tpi_3 
+- tpi_stack$tpi_5, 
+- tri_stack$tri_3, 
+- tri_stack$tri_5, 
+- tri_stack$tri_15,
+- roughness_stack$rough_3, 
+- roughness_stack$rough_5, 
+- roughness_stack$rough_15, 
+- dem,
+- dist_rivers,
+- dist_sandstone_geo,
+- dist_non_quart_geo,
+- viewshed, 
+- eastness, 
+- dist_pekel_water
+
 ```{r}
 covariates
 #create an empty list
@@ -752,14 +773,17 @@ im_stack <- list()
 for (i in 1:length(rs)){
   im_stack[[i]] <- as.im(as(raster(rs[[i]]), "SpatialGridDataFrame"))
 }
-#name the items in the list so we know for later
-names(im_stack) <- c("slope_im", "tpi_3_im", "tpi_5_im", 
-        "tri_5_im","dem_im","dist_sandstone_geo_im",
-        "viewshed_im","eastness_im", "pekel_im")
 im_stack
-
-c_trend <- ~slope_im + tpi_3_im + tpi_5_im + tri_5_im +dem_im + 
-  dist_sandstone_geo_im + viewshed_im + eastness_im + pekel_im
+names(im_stack)
+#name the items in the list so we know for later
+names(im_stack) <- c("slope_im", "tpi_3_im", "tpi_5_im",
+                     "tri_3_im", "tri_5_im","tri_15_im",
+                     "rough_3_im","rough_5_im","rough_15_im",
+                     "dem_im","dist_rivers_im","dist_sandstone_geo_im",
+                     "dist_non_quart_geo_im","viewshed_im",
+                     "eastness_im", "pekel_im")
+im_stack
+c_trend <- ~slope_im + tpi_3_im + tpi_5_im + tri_3_im + tri_5_im + tri_15_im + rough_3_im + rough_5_im + rough_15_im +dem_im + dist_rivers_im + dist_sandstone_geo_im + dist_non_quart_geo_im + viewshed_im + eastness_im + pekel_im
 ```
 Create Rhohat plots for each of the variables to see their effect on mustatil location again
 
@@ -829,6 +853,12 @@ dev.off()
 ppm_mod1 <- step(ppm(sppp, trend=c_trend, covariates = im_stack , correction="iso", method = "logi"))
 pcf_mod1 <- envelope(ppm_mod1, fun=pcfinhom, correction="iso", nsim=999)
 
+#check for multicollinearity among variables 
+g <- getglmfit(ppm_mod1)
+library(faraway)
+library(car)
+faraway::vif(g)
+
 pdf(width=9, height=7, file = "plots/analysis_redo/pcf_first_order_zoomed_999sim.pdf")
 plot(pcf_mod1,xlim=c(0,10000), ylim=c(0,100), legend=FALSE, main="First-order model")
 dev.off()
@@ -843,7 +873,7 @@ plot(mod1_surf)
 pdf(width=9, height=7, file = "plots/analysis_redo/predicted_intensity_1order_test_1.pdf")
 plot(mod1_surf, legend=FALSE, main="Predicted intensity")
 dev.off()
-#worked but its not helful- need to normalise go back to manual method
+#worked but its not helpful- need to normalise go back to manual method
 
 #manually instead
 summary(ppm_mod1)
