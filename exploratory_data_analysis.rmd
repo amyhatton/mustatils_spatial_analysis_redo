@@ -795,6 +795,7 @@ for (i in 1:length(im_stack)){
 }
 plot(rhohat_list[[1]])
 ```
+
 ```{r get xlim for rhohat plots}
 summary(m_environ_data)
 ```
@@ -850,15 +851,85 @@ plot(pcf_null, legend=FALSE, main="CSR model")
 dev.off()
 
 #first order
-ppm_mod1 <- step(ppm(sppp, trend=c_trend, covariates = im_stack , correction="iso", method = "logi"))
+#Do a normal model first - check the collinearity and then chuck out some variables and use a step pricedure
+#ppm_mod1 <- step(ppm(sppp, trend=c_trend, covariates = im_stack , correction="iso", method = "logi"))
+ppm_mod1 <- ppm(sppp, trend=c_trend, covariates = im_stack , correction="iso", method = "logi")
 pcf_mod1 <- envelope(ppm_mod1, fun=pcfinhom, correction="iso", nsim=999)
 
 #check for multicollinearity among variables 
 g <- getglmfit(ppm_mod1)
-library(faraway)
 library(car)
-faraway::vif(g)
-car::vif(g)
+vif_values <- car::vif(g)
+
+#need to make a function for this but for now manually check and remove variable with largest VIF
+#largest value
+max(vif_values)
+#name of largest value variable
+which.max(vif_values)
+
+##remove tri 3##
+c_trend <- ~slope_im + tpi_3_im + tpi_5_im + tri_5_im + tri_15_im + rough_3_im + rough_5_im + rough_15_im +dem_im + dist_rivers_im + dist_sandstone_geo_im + dist_non_quart_geo_im + viewshed_im + eastness_im + pekel_im
+
+ppm_mod1 <- ppm(sppp, trend=c_trend, covariates = im_stack , correction="iso", method = "logi")
+
+g <- getglmfit(ppm_mod1)
+vif_values <- car::vif(g)
+#largest value
+max(vif_values)
+#name of largest value variable
+which.max(vif_values)
+
+##remove roughness 3##
+c_trend <- ~slope_im + tpi_3_im + tpi_5_im + tri_5_im + tri_15_im  + rough_5_im + rough_15_im +dem_im + dist_rivers_im + dist_sandstone_geo_im + dist_non_quart_geo_im + viewshed_im + eastness_im + pekel_im
+
+ppm_mod1 <- ppm(sppp, trend=c_trend, covariates = im_stack , correction="iso", method = "logi")
+
+g <- getglmfit(ppm_mod1)
+vif_values <- car::vif(g)
+#largest value
+max(vif_values)
+#name of largest value variable
+which.max(vif_values)
+
+##remove roughness 5##
+c_trend <- ~slope_im + tpi_3_im + tpi_5_im + tri_5_im + tri_15_im + rough_15_im +dem_im + dist_rivers_im + dist_sandstone_geo_im + dist_non_quart_geo_im + viewshed_im + eastness_im + pekel_im
+
+ppm_mod1 <- ppm(sppp, trend=c_trend, covariates = im_stack , correction="iso", method = "logi")
+
+g <- getglmfit(ppm_mod1)
+vif_values <- car::vif(g)
+#largest value
+max(vif_values)
+#name of largest value variable
+which.max(vif_values)
+
+##remove roughness 15##
+c_trend <- ~slope_im + tpi_3_im + tpi_5_im + tri_5_im + tri_15_im +dem_im + dist_rivers_im + dist_sandstone_geo_im + dist_non_quart_geo_im + viewshed_im + eastness_im + pekel_im
+
+ppm_mod1 <- ppm(sppp, trend=c_trend, covariates = im_stack , correction="iso", method = "logi")
+
+g <- getglmfit(ppm_mod1)
+vif_values <- car::vif(g)
+#largest value
+max(vif_values)
+#name of largest value variable
+which.max(vif_values)
+
+##remove slope##
+c_trend <- ~ tpi_3_im + tpi_5_im + tri_5_im + tri_15_im +dem_im + dist_rivers_im + dist_sandstone_geo_im + dist_non_quart_geo_im + viewshed_im + eastness_im + pekel_im
+
+ppm_mod1 <- ppm(sppp, trend=c_trend, covariates = im_stack , correction="iso", method = "logi")
+
+g <- getglmfit(ppm_mod1)
+vif_values <- car::vif(g)
+#largest value
+max(vif_values)
+#name of largest value variable
+which.max(vif_values)
+
+###All remaining variables have VIF < 5 so we can make a step ppm model now###
+
+ppm_mod1 <- step(ppm(sppp, trend=c_trend, covariates = im_stack , correction="iso", method = "logi"))
 
 pdf(width=9, height=7, file = "plots/analysis_redo/pcf_first_order_zoomed_999sim.pdf")
 plot(pcf_mod1,xlim=c(0,10000), ylim=c(0,100), legend=FALSE, main="First-order model")
