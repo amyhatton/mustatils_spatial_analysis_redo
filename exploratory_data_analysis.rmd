@@ -602,19 +602,16 @@ lrtest(pekel.m) #very good pvalue < 2.2e-16 ***; standardised pvalue
 Going to incorporate the following variable as they seem to be good predictors:
 
 - east facing
-- elevation
 - slope
 - tpi 3 + 5
 - tri 3, 5, 15
 - roughness 3, 5 ,15
 - dem
 - dist to rivers
-- distance to lakes and rivers
-- distance to deposits and rivers 
 - distance to sandstone geo
 - dist to non quaternary geology
 - viewshed
-- distance to
+- distance to pekel
 
 #### Pearsons correlation
 
