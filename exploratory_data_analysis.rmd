@@ -201,12 +201,10 @@ par(mfrow=c(1,1))
 (doing eastness and northness instead of aspect)
 ## Create eastness and northness raster (linear variable better than aspect where 0=360)
 ```{r}
-
 northness <- cos(aspect * pi / 180)
 names(northness) <- "northness"
 eastness <- sin(aspect * pi / 180)
 names(eastness) <- "eastness"
-
 ```
 
 ```{r}
