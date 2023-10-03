@@ -355,18 +355,20 @@ summary(m_environ_data)
 ```
 
 ```{r rhohat plots}
-pdf("plots/rhohat/all_rhohats_long.pdf", width= 7, height=10.5)
-par(mfrow = c(4,2))
-plot(rhohat_list[[1]], main = "Topographic Position Index 90m",xlim=c(-3,7),legend=FALSE) #,xlim=c(-3,7)
-plot(rhohat_list[[2]], main = "Topographic Position Index 150m",xlim=c(-35,55), legend=FALSE)
-plot(rhohat_list[[3]], main = "Terrain Roughness 150m",xlim=c(0,100), legend=FALSE)
-plot(rhohat_list[[4]], main = "Elevation (masl)", legend=FALSE)
-plot(rhohat_list[[5]], main = "Distance to rivers",xlim=c(0,25000), legend=FALSE)
-plot(rhohat_list[[6]], main = "Distance to sandstone outcrops",xlim=c(0,35000), legend=FALSE)
-plot(rhohat_list[[7]], main = "Total viewshed", legend=FALSE)
-plot(rhohat_list[[8]], main = "Eastness", legend=FALSE)
+pdf("plots/rhohat/analysis_redo/all_rhohats_long.pdf", width= 7, height=10.5)
+par(mfrow = c(3,2))
+plot(rhohat_list[[10]], main = "Elevation",xlim=c(850, 1300), legend=FALSE)
+plot(rhohat_list[[2]], main = "Topographic Position Index 90m",xlim=c(-3,7),legend=FALSE) #,xlim=c(-3,7)
+plot(rhohat_list[[3]], main = "Topographic Position Index 150m",xlim=c(-35,55), legend=FALSE)
+plot(rhohat_list[[5]], main = "Terrain Roughness 150m",xlim=c(0,150), legend=FALSE)
+plot(rhohat_list[[6]], main = "Terrain Roughness 450m",xlim=c(0,1600), legend=FALSE)
+plot(rhohat_list[[11]], main = "Distance to rivers",xlim=c(0,25000), legend=FALSE)
+plot(rhohat_list[[12]], main = "Distance to sandstone outcrops",xlim=c(0,35000), legend=FALSE)
+plot(rhohat_list[[13]], main = "Non-quarternary geology",xlim=c(0,1100), legend=FALSE)
+plot(rhohat_list[[14]], main = "Total viewshed", legend=FALSE)
+plot(rhohat_list[[15]], main = "Eastness", legend=FALSE)
+plot(rhohat_list[[16]], main = "Distance to recent water accumulation",xlim=c(0, 30000), legend=FALSE)
 dev.off()
-locvals_all_sites
 ```
 
 Plot a map of each of the variables to go in the top corner of the rhohat plots
@@ -378,16 +380,20 @@ cols <- brewer.pal(3, "PRGn")
 pal <- colorRampPalette(cols)
 library(viridis)
 
-pdf("plots/rhohat/variable_maps.pdf", width=14, height=5)
-par(mfrow = c(2,4))
-plot(tpi_stack$tpi_3, main="TPI 3", col=pal(12), axes=FALSE, box=FALSE, legend.args=list(text="",side=2))
-plot(tpi_stack$tpi_5, main="TPI 5", col=pal(12), axes=FALSE, box=FALSE, legend.args=list(text="",side=2))
-plot(roughness_stack$rough_5, main="Roughness 5", col=viridis(10), axes=FALSE, box=FALSE, legend.args=list(text="",side=2))
+pdf("plots/rhohat/analysis_redo/variable_maps.pdf", width=14, height=5)
+par(mfrow = c(2,3))
+plot(tpi_stack$tpi_3, main="TPI 90m", col=pal(12), axes=FALSE, box=FALSE, legend.args=list(text="",side=2))
+plot(tpi_stack$tpi_5, main="TPI 150m", col=pal(12), axes=FALSE, box=FALSE, legend.args=list(text="",side=2))
+plot(tri_stack$tri_5, main="TRI 150m", col=viridis(10), axes=FALSE, box=FALSE, legend.args=list(text="",side=2))
+plot(tri_stack$tri_15, main="TRI 450m", col=viridis(10), axes=FALSE, box=FALSE, legend.args=list(text="",side=2))
 plot(dem, main="DEM", col=viridis(20), axes=FALSE, box=FALSE, legend.args=list(text="",side=2))
 plot(dist_rivers, main="Dist rivers", col=plasma(20), axes=FALSE, box=FALSE, legend.args=list(text="",side=2), horizontal=TRUE )
+plot(dist_pekel_water, main="Dist to recent water occurence", col=plasma(20), axes=FALSE, box=FALSE, legend.args=list(text="",side=2), horizontal=TRUE )
 plot(dist_sandstone_geo, main="Dist sandstone", col=plasma(20), axes=FALSE, box=FALSE, legend.args=list(text="",side=2))
+plot(dist_non_quart_geo, main="Dist non-quarternary geo", col=plasma(20), axes=FALSE, box=FALSE, legend.args=list(text="",side=2))
 plot(viewshed, main="Viewshed", col=viridis(10), axes=FALSE, box=FALSE, legend.args=list(text="",side=2) )
 plot(eastness, main="Eastness", col=pal(10), axes=FALSE, box=FALSE, legend.args=list(text="",side=2 ))
+
 dev.off()
 ```
 
@@ -418,8 +424,8 @@ max(vif_values)
 #name of largest value variable
 which.max(vif_values)
 
-##remove tri 3##
-c_trend <- ~slope_im + tpi_3_im + tpi_5_im + tri_5_im + tri_15_im + rough_3_im + rough_5_im + rough_15_im +dem_im + dist_rivers_im + dist_sandstone_geo_im + dist_non_quart_geo_im + viewshed_im + eastness_im + pekel_im
+#remove slope
+c_trend <- ~tpi_3_im + tpi_5_im + tri_5_im + tri_15_im + rough_3_im + rough_5_im + rough_15_im +dem_im + dist_rivers_im + dist_sandstone_geo_im + dist_non_quart_geo_im + viewshed_im + eastness_im + pekel_im
 
 ppm_mod1 <- ppm(sppp, trend=c_trend, covariates = im_stack , correction="iso", method = "logi")
 
@@ -430,8 +436,8 @@ max(vif_values)
 #name of largest value variable
 which.max(vif_values)
 
-##remove roughness 3##
-c_trend <- ~slope_im + tpi_3_im + tpi_5_im + tri_5_im + tri_15_im  + rough_5_im + rough_15_im +dem_im + dist_rivers_im + dist_sandstone_geo_im + dist_non_quart_geo_im + viewshed_im + eastness_im + pekel_im
+#remove roughness 5
+c_trend <- ~tpi_3_im + tpi_5_im + tri_5_im + tri_15_im + rough_3_im + rough_15_im +dem_im + dist_rivers_im + dist_sandstone_geo_im + dist_non_quart_geo_im + viewshed_im + eastness_im + pekel_im
 
 ppm_mod1 <- ppm(sppp, trend=c_trend, covariates = im_stack , correction="iso", method = "logi")
 
@@ -442,8 +448,9 @@ max(vif_values)
 #name of largest value variable
 which.max(vif_values)
 
-##remove roughness 5##
-c_trend <- ~slope_im + tpi_3_im + tpi_5_im + tri_5_im + tri_15_im + rough_15_im +dem_im + dist_rivers_im + dist_sandstone_geo_im + dist_non_quart_geo_im + viewshed_im + eastness_im + pekel_im
+
+#remove roughness 5
+c_trend <- ~tpi_3_im + tpi_5_im + tri_5_im + tri_15_im + rough_3_im + dem_im + dist_rivers_im + dist_sandstone_geo_im + dist_non_quart_geo_im + viewshed_im + eastness_im + pekel_im
 
 ppm_mod1 <- ppm(sppp, trend=c_trend, covariates = im_stack , correction="iso", method = "logi")
 
@@ -454,8 +461,8 @@ max(vif_values)
 #name of largest value variable
 which.max(vif_values)
 
-##remove roughness 15##
-c_trend <- ~slope_im + tpi_3_im + tpi_5_im + tri_5_im + tri_15_im +dem_im + dist_rivers_im + dist_sandstone_geo_im + dist_non_quart_geo_im + viewshed_im + eastness_im + pekel_im
+#remove roughness 3
+c_trend <- ~tpi_3_im + tpi_5_im + tri_5_im + tri_15_im + dem_im + dist_rivers_im + dist_sandstone_geo_im + dist_non_quart_geo_im + viewshed_im + eastness_im + pekel_im
 
 ppm_mod1 <- ppm(sppp, trend=c_trend, covariates = im_stack , correction="iso", method = "logi")
 
@@ -465,54 +472,17 @@ vif_values <- car::vif(g)
 max(vif_values)
 #name of largest value variable
 which.max(vif_values)
-
-##remove slope##
-c_trend <- ~ tpi_3_im + tpi_5_im + tri_5_im + tri_15_im +dem_im + dist_rivers_im + dist_sandstone_geo_im + dist_non_quart_geo_im + viewshed_im + eastness_im + pekel_im
-
-ppm_mod1 <- ppm(sppp, trend=c_trend, covariates = im_stack , correction="iso", method = "logi")
-
-g <- getglmfit(ppm_mod1)
-vif_values <- car::vif(g)
-#largest value
-max(vif_values)
-#name of largest value variable
-which.max(vif_values)
+###########
 
 ###All remaining variables have VIF < 5 so we can make a step ppm model now###
 
 ppm_mod1 <- step(ppm(sppp, trend=c_trend, covariates = im_stack , correction="iso", method = "logi"))
 
+summary(ppm_mod1)
+
 pdf(width=9, height=7, file = "plots/analysis_redo/pcf_first_order_zoomed_999sim.pdf")
 plot(pcf_mod1,xlim=c(0,10000), ylim=c(0,100), legend=FALSE, main="First-order model")
 dev.off()
-
-#model is better than null
-#prediction surface use coarser grid - this keeeps crashing r
-r_90 <- rast(res=90, ext = ext(rr[[1]]), vals=1)
-r_90 <- raster(r_90)
-r_90 <- as.im(as(r_90, "SpatialGridDataFrame"))
-mod1_surf <- predict(ppm_mod1, locations=as.mask(r_90))
-plot(mod1_surf)
-pdf(width=9, height=7, file = "plots/analysis_redo/predicted_intensity_1order_test_1.pdf")
-plot(mod1_surf, legend=FALSE, main="Predicted intensity")
-dev.off()
-#worked but its not helpful- need to normalise go back to manual method
-
-#manually instead
-summary(ppm_mod1)
-rf[[2]]
-logodds_ppm <- -1.881510e+01+(e_facing*1.137021e+00)+(rf[[2]]*5.133228e-01)+(rf[[3]]*-1.488761e-04)+(rf[[4]]*-6.033031e-03)
-relprob_ppm <- (exp(logodds_ppm))/(1+(exp(logodds_ppm)))
-
-plot(logodds_ppm)
-
-pdf(width=9, height=7, file = "plots/analysis_redo/predicted_intensity_1order_test_2.pdf")
-plot(log_odds_ppm, legend=FALSE, main="Predicted intensity")
-dev.off()
-
-writeRaster(relprob, "data/outputs/prediction_surface_multivariat_mod.tif")
-points(all_sites[all_sites$value==1,])
-summary(relprob_ppm)
 
 ```
 
@@ -557,8 +527,8 @@ f_s_sim_sf <- st_as_sf(f_s_sim, crs=32637)
 
 ```{r}
 #plot
-pdf(width=9, height=8, file = "plots/simulated_points.pdf")
-par(mfrow=c(3,2))
+pdf(width=9, height=8, file = "plots/analysis_redo/simulated_points.pdf")
+par(mfrow=c(3,1))
 tm_shape(null_sim_sf)+
   tm_polygons(col = "#433e85")+
   tm_dots(col = "white",size = 0.4)
