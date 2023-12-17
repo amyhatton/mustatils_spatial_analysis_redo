@@ -355,7 +355,7 @@ summary(m_environ_data)
 ```
 
 ```{r rhohat plots}
-pdf("plots/rhohat/analysis_redo/all_rhohats_long.pdf", width= 7, height=10.5)
+pdf("plots/analysis_redo/all_rhohats_long.pdf", width= 7, height=10.5)
 par(mfrow = c(3,2))
 plot(rhohat_list[[10]], main = "Elevation",xlim=c(850, 1300), legend=FALSE)
 plot(rhohat_list[[2]], main = "Topographic Position Index 90m",xlim=c(-3,7),legend=FALSE) #,xlim=c(-3,7)
@@ -380,20 +380,38 @@ cols <- brewer.pal(3, "PRGn")
 pal <- colorRampPalette(cols)
 library(viridis)
 
-pdf("plots/rhohat/analysis_redo/variable_maps.pdf", width=14, height=5)
-par(mfrow = c(2,3))
-plot(tpi_stack$tpi_3, main="TPI 90m", col=pal(12), axes=FALSE, box=FALSE, legend.args=list(text="",side=2))
-plot(tpi_stack$tpi_5, main="TPI 150m", col=pal(12), axes=FALSE, box=FALSE, legend.args=list(text="",side=2))
-plot(tri_stack$tri_5, main="TRI 150m", col=viridis(10), axes=FALSE, box=FALSE, legend.args=list(text="",side=2))
-plot(tri_stack$tri_15, main="TRI 450m", col=viridis(10), axes=FALSE, box=FALSE, legend.args=list(text="",side=2))
-plot(dem, main="DEM", col=viridis(20), axes=FALSE, box=FALSE, legend.args=list(text="",side=2))
-plot(dist_rivers, main="Dist rivers", col=plasma(20), axes=FALSE, box=FALSE, legend.args=list(text="",side=2), horizontal=TRUE )
-plot(dist_pekel_water, main="Dist to recent water occurence", col=plasma(20), axes=FALSE, box=FALSE, legend.args=list(text="",side=2), horizontal=TRUE )
-plot(dist_sandstone_geo, main="Dist sandstone", col=plasma(20), axes=FALSE, box=FALSE, legend.args=list(text="",side=2))
-plot(dist_non_quart_geo, main="Dist non-quarternary geo", col=plasma(20), axes=FALSE, box=FALSE, legend.args=list(text="",side=2))
-plot(viewshed, main="Viewshed", col=viridis(10), axes=FALSE, box=FALSE, legend.args=list(text="",side=2) )
+pdf("plots/analysis_redo/rhohat_variable_maps.pdf", width=9, height=12)
+par(mfrow = c(5,2))
+plot(rhohat_list[[2]], main = "Topographic Position Index 90m",xlim=c(-3,7),legend=FALSE) #,xlim=c(-3,7)
+plot(tpi_stack$tpi_3, main="Topographic Position Index 90m", col=pal(12), axes=FALSE, box=FALSE, legend.args=list(text="",side=2))
+
+plot(rhohat_list[[3]], main = "Topographic Position Index 150m",xlim=c(-35,55), legend=FALSE)
+plot(tpi_stack$tpi_5, main="Topographic Position Index 150m", col=pal(12), axes=FALSE, box=FALSE, legend.args=list(text="",side=2))
+
+
+plot(rhohat_list[[6]], main = "Terrain Ruggedness Index 450m",xlim=c(0,1600), legend=FALSE)
+plot(tri_stack$tri_15, main="Terrain Ruggedness Index 450m", col=viridis(10), axes=FALSE, box=FALSE, legend.args=list(text="",side=2))
+
+plot(rhohat_list[[10]], main = "Elevation",xlim=c(850, 1300), legend=FALSE)
+plot(dem, main="Elevation", col=viridis(20), axes=FALSE, box=FALSE, legend.args=list(text="",side=2))
+
+plot(rhohat_list[[14]], main = "Total viewshed", legend=FALSE)
+plot(viewshed, main="Total viewshed", col=viridis(10), axes=FALSE, box=FALSE, legend.args=list(text="",side=2) )
+
+plot(rhohat_list[[15]], main = "Eastness", legend=FALSE)
 plot(eastness, main="Eastness", col=pal(10), axes=FALSE, box=FALSE, legend.args=list(text="",side=2 ))
 
+plot(rhohat_list[[11]], main = "Distance to palaeorivers",xlim=c(0,25000), legend=FALSE)
+plot(dist_rivers, main="Distance to palaeorivers", col=plasma(20), axes=FALSE, box=FALSE, legend.args=list(text="",side=2))
+
+plot(rhohat_list[[16]], main = "Distance to recent water occurence",xlim=c(0, 30000), legend=FALSE)
+plot(dist_pekel_water, main="Distance to recent water occurence", col=plasma(20), axes=FALSE, box=FALSE, legend.args=list(text="",side=2))
+
+plot(rhohat_list[[12]], main = "Distance to sandstone outcrops",xlim=c(0,35000), legend=FALSE)
+plot(dist_sandstone_geo, main="Distance to sandstone outcrops", col=plasma(20), axes=FALSE, box=FALSE, legend.args=list(text="",side=2))
+
+plot(rhohat_list[[13]], main = "Distance to non-quarternary geology",xlim=c(0,1100), legend=FALSE)
+plot(dist_non_quart_geo, main="Distance to non-quarternary geo", col=plasma(20), axes=FALSE, box=FALSE, legend.args=list(text="",side=2))
 dev.off()
 ```
 
@@ -477,7 +495,7 @@ which.max(vif_values)
 ###All remaining variables have VIF < 5 so we can make a step ppm model now###
 
 ppm_mod1 <- step(ppm(sppp, trend=c_trend, covariates = im_stack , correction="iso", method = "logi"))
-
+pcf_mod1 <- envelope(ppm_mod1, fun=pcfinhom, correction="iso", nsim=1999)
 summary(ppm_mod1)
 
 pdf(width=9, height=7, file = "plots/analysis_redo/pcf_first_order_zoomed_999sim.pdf")
@@ -491,20 +509,20 @@ dev.off()
 interaction until 2000m (there is clustering from 0 to ~3000m )
 
 ```{r}
-mod_2nd_o <- step(ppm(sppp, trend=c_trend, interaction = AreaInter(3000), covariates = im_stack, method="logi"))
+mod_2nd_o <- step(ppm(sppp, trend=c_trend, interaction = AreaInter(1500), covariates = im_stack, method="logi"))
 pcf_mod_2nd_o <- envelope(mod_2nd_o, fun=pcfinhom, correction="iso", nsim=999)
 summary(mod_2nd_o)
-pdf(width=9, height=7, file = "plots/analysis_redo/pcf_2nd_order_zoomed_999sim.pdf")
-plot(pcf_mod_2nd_o,xlim=c(0,10000), ylim=c(0,250), legend=FALSE, main="First and second-order model")
+pdf(width=9, height=7, file = "plots/analysis_redo/pcf_2nd_order_zoomed_999sim_1500m.pdf")
+plot(pcf_mod_2nd_o,xlim=c(3000,4000), ylim=c(0,20), legend=FALSE, main="First and second-order model")
 dev.off()
 ```
 
 ```{r plot pcf}
-pdf(width=10, height=3, file = "plots/analysis_redo/pcfs.pdf")
+pdf(width=9, height=3, file = "plots/analysis_redo/pcfs_2.pdf")
 par(mfrow=c(1,3))
-plot(pcf_null, xlim=c(0,10000), ylim=c(0,200), legend=FALSE, main="CSR model")
-plot(pcf_mod1, xlim=c(0,10000), ylim=c(0,200),legend=FALSE, main="First-order model") #xlim=c(0,10000), ylim=c(0,100),
-plot(pcf_mod_2nd_o,xlim=c(0,10000), ylim=c(0,200), legend=FALSE, main="First and second-order model") #xlim=c(0,10000), ylim=c(0,250),
+plot(pcf_null, xlim=c(0,10000), ylim=c(0,150), legend=FALSE, main="CSR model")
+plot(pcf_mod1, xlim=c(0,10000), ylim=c(0,150),legend=FALSE, main="First-order model") #xlim=c(0,10000), ylim=c(0,100),
+plot(pcf_mod_2nd_o,xlim=c(0,10000), ylim=c(0,150), legend=FALSE, main="First and second-order model") #xlim=c(0,10000), ylim=c(0,250),
 dev.off()
 ```
 
@@ -572,6 +590,7 @@ noise  <- subset(m_clust_df_lat, m_clust_df_lat$cluster == 0) # define noise
 names(m_clust_df) <- tolower(names(m_clust_df))
 
 points <- ppp(x=m_clust_df$x,y=m_clust_df$y, marks=m_clust_df$length, window= m_owin)
+
 ```
 The mark correlation function (markcorr) estimates the correlation of points based on their mark,
 eg what effect does mustatil length have on their distribution

@@ -1,0 +1,539 @@
+---
+title: "Hatton et al. Mustatils spatial analysis"
+author: "Amy Hatton"
+date: "2023-10-02"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+install.packages(c("tidyverse", "raster", "sf","maptools", "terra", "tmap", "spatstat", "stars"))
+library(tidyverse)
+library(raster)
+library(sf)
+library(maptools)
+library(terra)
+library(tmap)
+library(spatstat)
+library(stars)
+```
+
+Run the "DEM_derivitives.R" script to calculate a bunch of landform classifications
+Warning - This will take a while to run!
+```{r, include=FALSE}
+sys.source("DEM_derivitives.R", envir = knitr::knit_global())
+
+tpi_stack <- raster::brick("data/tpi_stack.tif")
+tri_stack <- raster::brick("data/tri_stack.tif")
+roughness_stack <- raster::brick("data/roughness_stack.tif")
+#Read in the created data:
+slope <- raster("data/slope.tif")
+aspect <- raster("data/aspect.tif")
+```
+
+Import the data
+```{r}
+#read in vector data
+rastlist <- list.files(path = "data", pattern='.tif$', all.files= T, full.names= T)
+rastlist <- rastlist[-2]
+rasts <- lapply(rastlist, rast)
+names(rasts)
+rasts$aspect
+rasters <- terra::rast(rastlist)
+rasts[[1]]
+rastlist[2]
+mustatils <- st_read("data/mustatils.gpkg")
+study_area <- st_read("data/study_area.gpkg")
+dem <- raster("data/dem.tif")
+dist_lakes <- raster("data/dist_lakes.tif")
+dist_rivers <- raster("data/dist_rivers.tif")
+dist_deposits <- raster("data/dist_deposits.tif")
+dist_lakes_rivers <- raster("data/dist_lakes_rivers.tif")
+dist_deposits_rivers <- raster("data/dist_deposits_rivers.tif")
+dist_sandstone_geo <- raster("data/dist_sandstone_geo.tif")
+dist_non_quart_geo <- raster("data/dist_non_quart_geo.tif")
+viewshed <- raster("data/t_vshed_whole_scaled.tif")
+dist_pekel_water <- raster("data/dist_pekel_mask.tif")
+names(dist_pekel_water) <- "dist_pekel_water"
+```
+Aspect seems like an important variable, but from looking at the data it seems that many mustatils face east. Decided to separate aspect out into eastness and northness to better isolate that relationship
+```{r}
+northness <- cos(aspect * pi / 180)
+names(northness) <- "northness"
+eastness <- sin(aspect * pi / 180)
+names(eastness) <- "eastness"
+```
+
+Run the other script to create some other layers derived from DEM
+```{r}
+
+```
+
+
+
+```{r}
+#list of variables with good predictive power
+r = list(slope,tpi_stack$tpi_3,tpi_stack$tpi_5, tri_stack$tri_3, 
+         tri_stack$tri_5, tri_stack$tri_15,roughness_stack$rough_3, 
+         roughness_stack$rough_5, roughness_stack$rough_15, 
+         dem,dist_rivers,dist_sandstone_geo,dist_non_quart_geo,
+         viewshed, eastness, dist_pekel_water)
+
+rr <- lapply(r, rast)
+#get the extent of the first raster in the list
+r1 <- rast(res=30, ext = ext(rr[[1]]))
+
+#rename the variable
+standard <- r1
+#Create a list where the resamples rasters will go
+rs <- list(r1)
+
+#iterate over the rasters and resample to make sure they have the same extent
+for (i in 1:length(rr)){
+  rs[[i]] <- terra::resample(rr[[i]], standard, method='bilinear')
+}
+
+#convert back to raster (from spatraster)
+rf<- lapply(rs, raster)
+#covariates as rasters
+covariates_rs <- stack(rf)
+
+#finally get covariates stack as spatrasters
+covariates <- rast(rs)
+
+#check to see they've kept their names
+plot(covariates[[16]])
+
+m_environ_data <- data.frame(raster::extract(covariates,m_points_c))
+```
+
+
+# Point Process Model (PPM)
+
+#### Create ppp mustatils
+```{r}
+library(spatstat)
+#Generate points from mustatil centroid
+m_points_c <- st_centroid(mustatils)
+coords <- as.data.frame(st_coordinates(m_points_c))
+m_owin <- as.owin(study_area)
+sppp <- ppp(x=coords$X, y=coords$Y, window=m_owin)
+```
+
+#Density based approach
+##KDE
+Kernel density estimation to see general patterning of points
+Kernel size is very important so need to test different sizes and see what works best for the data
+
+I will start with small kernel = 2000m, empirical = nearest neighbour distance (~9000m), large kernel 15km 
+
+First calculate nearest neighbour distance 
+```{r}
+nn <- 3*mean(nndist(sppp))
+```
+Calculate KDE for three different sigma's
+```{r}
+s_kde <- density.ppp(sppp, sigma = 2000)
+plot(s_kde)
+e_kde <- density.ppp(sppp, sigma = nn)
+plot(e_kde)
+l_kde <- density.ppp(sppp, sigma = 15000)
+plot(l_kde)
+
+pdf("plots/kde_final.pdf", width=12, height=3)
+par(mfrow = c(1,3))
+
+plot(s_kde,  main="sigma=2km")
+points(sppp, pch=1, cex=0.5, col = "grey80",  lwd=0.5)
+
+plot(e_kde,  main="sigma=9km")
+points(sppp, pch=1, cex=0.5, col = "grey80", lwd=0.5)
+
+plot(l_kde,  main="sigma=15km")
+points(sppp, pch=1, cex=0.5, col = "grey80", lwd=0.5)
+dev.off()
+```
+
+#Distance based approaches
+## K function
+Basic first order patterning (mustatils more clustered at <5km than CSR)
+```{r}
+plot(Kest(sppp, correction="iso"))
+
+#with montecarlo simulation start small
+pcf_1 = envelope(sppp, pcf, nsim=999, correction="iso", nrank=1)
+plot(pcf_1)
+```
+#### Convert to im stack
+Convert all of the useful variables into im's and create a stack - look at rhohat plots for each and export them 
+
+variables that have predictive power - will check for collinearity afterwards using VIF
+- slope,
+- tpi_stack$tpi_3 
+- tpi_stack$tpi_5, 
+- tri_stack$tri_3, 
+- tri_stack$tri_5, 
+- tri_stack$tri_15,
+- roughness_stack$rough_3, 
+- roughness_stack$rough_5, 
+- roughness_stack$rough_15, 
+- dem,
+- dist_rivers,
+- dist_sandstone_geo,
+- dist_non_quart_geo,
+- viewshed, 
+- eastness, 
+- dist_pekel_water
+
+```{r}
+covariates
+#create an empty list
+im_stack <- list()
+#convert them all in a for loop 
+for (i in 1:length(rs)){
+  im_stack[[i]] <- as.im(as(raster(rs[[i]]), "SpatialGridDataFrame"))
+}
+
+names(im_stack)
+#name the items in the list so we know for later
+names(im_stack) <- c("slope_im", "tpi_3_im", "tpi_5_im",
+                     "tri_3_im", "tri_5_im","tri_15_im",
+                     "rough_3_im","rough_5_im","rough_15_im",
+                     "dem_im","dist_rivers_im","dist_sandstone_geo_im",
+                     "dist_non_quart_geo_im","viewshed_im",
+                     "eastness_im", "pekel_im")
+
+#check renaming worked
+im_stack
+
+c_trend <- ~slope_im + tpi_3_im + tpi_5_im + tri_3_im + tri_5_im + tri_15_im + rough_3_im + rough_5_im + rough_15_im +dem_im + dist_rivers_im + dist_sandstone_geo_im + dist_non_quart_geo_im + viewshed_im + eastness_im + pekel_im
+```
+
+Create Rhohat plots for each of the variables to see their effect on mustatil location again
+
+automatically for all seems to work but plots are a bit weird - can work on it later doing it manually for now.
+```{r rhohat automated, eval=FALSE}
+rhohat_list <- list()
+for (i in 1:length(im_stack)){
+  rhohat_list[[i]] <- rhohat(sppp, im_stack[[i]], confidence=0.95)
+}
+plot(rhohat_list[[1]])
+```
+
+```{r get xlim for rhohat plots}
+summary(m_environ_data)
+```
+
+```{r rhohat plots}
+pdf("plots/all_rhohats_long.pdf", width= 7, height=10.5)
+par(mfrow = c(3,2))
+plot(rhohat_list[[10]], main = "Elevation",xlim=c(850, 1300), legend=FALSE)
+plot(rhohat_list[[2]], main = "Topographic Position Index 90m",xlim=c(-3,7),legend=FALSE) #,xlim=c(-3,7)
+plot(rhohat_list[[3]], main = "Topographic Position Index 150m",xlim=c(-35,55), legend=FALSE)
+plot(rhohat_list[[5]], main = "Terrain Roughness 150m",xlim=c(0,150), legend=FALSE)
+plot(rhohat_list[[6]], main = "Terrain Roughness 450m",xlim=c(0,1600), legend=FALSE)
+plot(rhohat_list[[11]], main = "Distance to rivers",xlim=c(0,25000), legend=FALSE)
+plot(rhohat_list[[12]], main = "Distance to sandstone outcrops",xlim=c(0,35000), legend=FALSE)
+plot(rhohat_list[[13]], main = "Non-quarternary geology",xlim=c(0,1100), legend=FALSE)
+plot(rhohat_list[[14]], main = "Total viewshed", legend=FALSE)
+plot(rhohat_list[[15]], main = "Eastness", legend=FALSE)
+plot(rhohat_list[[16]], main = "Distance to recent water accumulation",xlim=c(0, 30000), legend=FALSE)
+dev.off()
+```
+
+Plot a map of each of the variables to go in the top corner of the rhohat plots
+```{r variable maps for rhohat}
+#set up palette for tpi
+library(RColorBrewer)
+cols <- brewer.pal(3, "PRGn")
+pal <- colorRampPalette(cols)
+library(viridis)
+
+pdf("plots/rhohat_variable_maps.pdf", width=9, height=12)
+par(mfrow = c(5,2))
+plot(rhohat_list[[2]], main = "Topographic Position Index 90m",xlim=c(-3,7),legend=FALSE) #,xlim=c(-3,7)
+plot(tpi_stack$tpi_3, main="Topographic Position Index 90m", col=pal(12), axes=FALSE, box=FALSE, legend.args=list(text="",side=2))
+
+plot(rhohat_list[[3]], main = "Topographic Position Index 150m",xlim=c(-35,55), legend=FALSE)
+plot(tpi_stack$tpi_5, main="Topographic Position Index 150m", col=pal(12), axes=FALSE, box=FALSE, legend.args=list(text="",side=2))
+
+
+plot(rhohat_list[[6]], main = "Terrain Ruggedness Index 450m",xlim=c(0,1600), legend=FALSE)
+plot(tri_stack$tri_15, main="Terrain Ruggedness Index 450m", col=viridis(10), axes=FALSE, box=FALSE, legend.args=list(text="",side=2))
+
+plot(rhohat_list[[10]], main = "Elevation",xlim=c(850, 1300), legend=FALSE)
+plot(dem, main="Elevation", col=viridis(20), axes=FALSE, box=FALSE, legend.args=list(text="",side=2))
+
+plot(rhohat_list[[14]], main = "Total viewshed", legend=FALSE)
+plot(viewshed, main="Total viewshed", col=viridis(10), axes=FALSE, box=FALSE, legend.args=list(text="",side=2) )
+
+plot(rhohat_list[[15]], main = "Eastness", legend=FALSE)
+plot(eastness, main="Eastness", col=pal(10), axes=FALSE, box=FALSE, legend.args=list(text="",side=2 ))
+
+plot(rhohat_list[[11]], main = "Distance to palaeorivers",xlim=c(0,25000), legend=FALSE)
+plot(dist_rivers, main="Distance to palaeorivers", col=plasma(20), axes=FALSE, box=FALSE, legend.args=list(text="",side=2))
+
+plot(rhohat_list[[16]], main = "Distance to recent water occurence",xlim=c(0, 30000), legend=FALSE)
+plot(dist_pekel_water, main="Distance to recent water occurence", col=plasma(20), axes=FALSE, box=FALSE, legend.args=list(text="",side=2))
+
+plot(rhohat_list[[12]], main = "Distance to sandstone outcrops",xlim=c(0,35000), legend=FALSE)
+plot(dist_sandstone_geo, main="Distance to sandstone outcrops", col=plasma(20), axes=FALSE, box=FALSE, legend.args=list(text="",side=2))
+
+plot(rhohat_list[[13]], main = "Distance to non-quarternary geology",xlim=c(0,1100), legend=FALSE)
+plot(dist_non_quart_geo, main="Distance to non-quarternary geo", col=plasma(20), axes=FALSE, box=FALSE, legend.args=list(text="",side=2))
+dev.off()
+```
+
+#Point process model
+```{r}
+#null model
+mod0 <- ppm(sppp, ~1)
+pcf_null <- envelope(mod0, fun=pcfinhom, correction="iso", nsim=999)
+
+pdf(width=5, height=4, file = "plots/pcf_null_final_999sim.pdf")
+plot(pcf_null, legend=FALSE, main="CSR model")
+dev.off()
+
+#first order
+
+#Do a normal model first - check the collinearity and then chuck out some variables and use a step procedure
+#ppm_mod1 <- step(ppm(sppp, trend=c_trend, covariates = im_stack , correction="iso", method = "logi"))
+ppm_mod1 <- ppm(sppp, trend=c_trend, covariates = im_stack , correction="iso", method = "logi")
+pcf_mod1 <- envelope(ppm_mod1, fun=pcfinhom, correction="iso", nsim=999)
+
+#check for multicollinearity among variables 
+g <- getglmfit(ppm_mod1)
+library(car)
+vif_values <- car::vif(g)
+
+#need to make a function for this but for now manually check and remove variable with largest VIF
+#largest value
+max(vif_values)
+#name of largest value variable
+which.max(vif_values)
+
+#remove slope
+c_trend <- ~tpi_3_im + tpi_5_im + tri_5_im + tri_15_im + rough_3_im + rough_5_im + rough_15_im +dem_im + dist_rivers_im + dist_sandstone_geo_im + dist_non_quart_geo_im + viewshed_im + eastness_im + pekel_im
+
+ppm_mod1 <- ppm(sppp, trend=c_trend, covariates = im_stack , correction="iso", method = "logi")
+
+g <- getglmfit(ppm_mod1)
+vif_values <- car::vif(g)
+#largest value
+max(vif_values)
+#name of largest value variable
+which.max(vif_values)
+
+#remove roughness 5
+c_trend <- ~tpi_3_im + tpi_5_im + tri_5_im + tri_15_im + rough_3_im + rough_15_im +dem_im + dist_rivers_im + dist_sandstone_geo_im + dist_non_quart_geo_im + viewshed_im + eastness_im + pekel_im
+
+ppm_mod1 <- ppm(sppp, trend=c_trend, covariates = im_stack , correction="iso", method = "logi")
+
+g <- getglmfit(ppm_mod1)
+vif_values <- car::vif(g)
+#largest value
+max(vif_values)
+#name of largest value variable
+which.max(vif_values)
+
+
+#remove roughness 5
+c_trend <- ~tpi_3_im + tpi_5_im + tri_5_im + tri_15_im + rough_3_im + dem_im + dist_rivers_im + dist_sandstone_geo_im + dist_non_quart_geo_im + viewshed_im + eastness_im + pekel_im
+
+ppm_mod1 <- ppm(sppp, trend=c_trend, covariates = im_stack , correction="iso", method = "logi")
+
+g <- getglmfit(ppm_mod1)
+vif_values <- car::vif(g)
+#largest value
+max(vif_values)
+#name of largest value variable
+which.max(vif_values)
+
+#remove roughness 3
+c_trend <- ~tpi_3_im + tpi_5_im + tri_5_im + tri_15_im + dem_im + dist_rivers_im + dist_sandstone_geo_im + dist_non_quart_geo_im + viewshed_im + eastness_im + pekel_im
+
+ppm_mod1 <- ppm(sppp, trend=c_trend, covariates = im_stack , correction="iso", method = "logi")
+
+g <- getglmfit(ppm_mod1)
+vif_values <- car::vif(g)
+#largest value
+max(vif_values)
+#name of largest value variable
+which.max(vif_values)
+###########
+
+#test a for loop:
+
+
+###All remaining variables have VIF < 5 so we can make a step ppm model now###
+
+ppm_mod1 <- step(ppm(sppp, trend=c_trend, covariates = im_stack , correction="iso", method = "logi"))
+pcf_mod1 <- envelope(ppm_mod1, fun=pcfinhom, correction="iso", nsim=1999)
+summary(ppm_mod1)
+
+pdf(width=9, height=7, file = "plots/analysis_redo/pcf_first_order_zoomed_999sim.pdf")
+plot(pcf_mod1,xlim=c(0,10000), ylim=c(0,100), legend=FALSE, main="First-order model")
+dev.off()
+
+```
+
+## Area interaction model (first and second order)
+
+interaction until 2000m (there is clustering from 0 to ~3000m )
+
+```{r}
+mod_2nd_o <- step(ppm(sppp, trend=c_trend, interaction = AreaInter(1500), covariates = im_stack, method="logi"))
+pcf_mod_2nd_o <- envelope(mod_2nd_o, fun=pcfinhom, correction="iso", nsim=999)
+summary(mod_2nd_o)
+pdf(width=9, height=7, file = "plots/analysis_redo/pcf_2nd_order_zoomed_999sim_1500m.pdf")
+plot(pcf_mod_2nd_o,xlim=c(3000,4000), ylim=c(0,20), legend=FALSE, main="First and second-order model")
+dev.off()
+```
+
+```{r plot pcf}
+pdf(width=9, height=3, file = "plots/pcfs.pdf")
+par(mfrow=c(1,3))
+plot(pcf_null, xlim=c(0,10000), ylim=c(0,150), legend=FALSE, main="CSR model")
+plot(pcf_mod1, xlim=c(0,10000), ylim=c(0,150),legend=FALSE, main="First-order model") #xlim=c(0,10000), ylim=c(0,100),
+plot(pcf_mod_2nd_o,xlim=c(0,10000), ylim=c(0,150), legend=FALSE, main="First and second-order model") #xlim=c(0,10000), ylim=c(0,250),
+dev.off()
+```
+
+### Compare models
+```{r}
+AIC(mod0)
+AIC(ppm_mod1)
+AIC(mod_2nd_o)
+
+#simulate points for each model
+null_sim <- simulate(mod0)
+f_sim <- simulate(ppm_mod1)
+f_s_sim <- simulate(mod_2nd_o)
+tmap_mode("plot")
+
+null_sim_sf <- st_as_sf(null_sim, crs=32637)
+f_sim_sf <- st_as_sf(f_sim, crs=32637)
+f_s_sim_sf <- st_as_sf(f_s_sim, crs=32637)
+```
+
+```{r}
+#plot
+pdf(width=9, height=8, file = "plots/simulated_points.pdf")
+par(mfrow=c(3,1))
+tm_shape(null_sim_sf)+
+  tm_polygons(col = "#433e85")+
+  tm_dots(col = "white",size = 0.4)
+
+tm_shape(f_sim_sf)+
+  tm_polygons(col = "#433e85")+
+  tm_dots(col = "white",size = 0.4)
+
+tm_shape(f_s_sim_sf)+
+  tm_polygons(col = "#433e85")+
+  tm_dots(col = "white",size = 0.4)
+dev.off()
+```
+## Mustatil length DBscan
+
+Create a marked point pattern (mark is mustatil length) so we can see what effect length has on patterning.
+```{r}
+#DBSCAN in R
+
+# permute through different eps distances (from the mark correlation 18000-19000)
+library(dbscan)
+clustering <- dbscan(cbind(coords$X, coords$Y), minPts = 3, eps=29787.05/2)
+
+#read in the mustatil data with size info
+m_length <- st_read("data/projected_utm37n/mustatils_with_size_metrics.gpkg")
+m_len_c <- st_as_sf(cbind(coords, m_length[,7, drop=FALSE]))
+#m_len_c <- st_transform(m_len_c, epsg=4326)
+m <- st_as_sf(m_points_c)
+m_points_latlong <- st_transform(m, crs =4326)
+coords_latlong <- as_data_frame(st_coordinates(m_points_latlong))
+m_clust_df <- m_len_c %>% st_set_geometry(NULL)
+m_clust_df$cluster <- clustering$cluster # add cluster vector to original data
+
+m_clust_df_lat <- cbind(m_clust_df[,c(3,4)], coords_latlong[,c(1,2)])
+groups  <- subset(m_clust_df_lat, m_clust_df_lat$cluster > 0) # define groups
+noise  <- subset(m_clust_df_lat, m_clust_df_lat$cluster == 0) # define noise
+
+#remove the ones that don't have a cluster
+#m_clust_df <- na.omit(m_len_df)
+names(m_clust_df) <- tolower(names(m_clust_df))
+
+points <- ppp(x=m_clust_df$x,y=m_clust_df$y, marks=m_clust_df$length, window= m_owin)
+
+```
+The mark correlation function (markcorr) estimates the correlation of points based on their mark,
+eg what effect does mustatil length have on their distribution
+```{r}
+#can change this to higher later (eg 999)
+numSims=999
+mcorr_1 <- envelope (points, markcorr, nsim=numSims)
+pdf(width=5, height=5,  file="plots/mark_corr.pdf")
+plot(mcorr_1, main="mark correlation function", legend=FALSE)
+dev.off()
+
+max(mcorr_1$obs) #max mark correlation is at ~30km
+```
+
+### Plotting the hierarchy analysis results
+
+Read in the results of the rank hierarchy analysis,
+Code to produce these results is from Pazos et al. 2019.
+Carrero-Pazos, Miguel; Bevan, Andrew; Lake, Mark (2019), “Supplementary data and R code for the paper: 'The Spatial Structure of Galician Megalithic Landscapes (NW Iberia): A Case Study from the Monte Penide Region'”, Mendeley Data, V1, https://doi.org/10.17632/3sb4hwrrw9.1
+```{r echo=FALSE}
+read_csv("data/rank_hierarchy_results.csv")
+```
+Plot the results of the rank hierarchy analysis: Code from Riris et al. 2020
+Riris, P. (2020, May 7). Supplemental materials for paper: Spatial Structure among the Geometric Earthworks of western Amazonia (Acre, Brazil). https://doi.org/10.17605/OSF.IO/NG896 
+
+```{r}
+library(RColorBrewer)
+library(ggforce)
+library(ggpubr)
+getPalette = colorRampPalette(brewer.pal(16, "Accent"))
+
+ggclusters <- ggplot(data = groups, aes(x = X, y = Y)) + 
+  geom_point(data=noise, aes(x = X, y = Y), size=1, color="black") +
+  coord_fixed() + theme_bw() + xlab("Longitude") + ylab("Latitude") +
+  scale_fill_manual(values = getPalette(15)) +
+  scale_color_manual(values = getPalette(15)) +
+  guides(fill=guide_legend(nrow=2, title="Cluster")) + 
+  geom_mark_hull(aes(fill=as.factor(cluster)), expand=unit(2, "mm"), radius=unit(2, "mm")) +
+  geom_point(size=2.5, pch=1, stroke=1.25, aes(color=as.factor(cluster)), show.legend = FALSE) +
+  theme(axis.text.y = element_text(angle = 90, hjust=1), 
+        legend.position="bottom")
+
+plot(ggclusters)
+m_clust_df_no_noise <- m_clust_df %>% dplyr::filter(cluster != 0)
+
+ghist <- ggplot(m_clust_df_no_noise,aes(x=m_clust_df_no_noise$cluster)) + 
+  geom_bar() +
+  theme_bw() +
+  ylab("Mustatil count") + xlab("Cluster") +
+  scale_x_continuous(labels = seq(1,15,1), breaks=seq(1,15,1), expand = c(0.02, 0.02)) +
+  scale_y_continuous(expand = c(0.04, 0.04))+
+  theme_bw()
+plot(ghist)
+
+rankings <- resultsB
+gdiff <- ggplot(rankings) +
+  geom_point(aes(rankings$level, rankings$ideal.sums), col="#549256", pch=1, stroke=1.5) +
+  geom_point(aes(rankings$level, rankings$observed.sums), col="#e2848e", pch=20, size=3) +
+  geom_segment(aes(x=rankings$level, y=rankings$ideal.sums, 
+                   xend=rankings$level, yend=rankings$observed.sums),
+               linetype="dashed") +
+  xlab("Size level") + ylab("Rank sum") + theme_bw()
+pdf(file = "plots/clusters.pdf", width =4, height =4)
+plot(ggclusters)
+dev.off()
+
+pdf(file = "plots/size_hierarchy_clusters_plots.pdf")
+ggarrange(mcorr_1, ggclusters, ghist, gdiff, ncol=2, nrow=2, labels=c("A", "B", "C", "D"))
+dev.off()
+```
+
+
+
+
