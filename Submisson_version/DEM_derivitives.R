@@ -8,6 +8,7 @@ library(stringr)
 library(rgdal)
 library(terra)
 library(terrainr)
+library(sf)
 
 
 #read in the dem
@@ -21,24 +22,26 @@ f_15<- matrix(1, nrow=15, ncol=15)
 x <- dem
 
 #calculate TRI at 3 scales
-tr_3 <- terra::focal(x, w=f_3, fun=function(x, ...) sum(abs(x[-5]-x[5]))/8)
-tr_5 <- terra::focal(x, w=f_5, fun=function(x, ...) sum(abs(x[-5]-x[5]))/8)
-tr_15 <- terra::focal(x, w=f_15, fun=function(x, ...) sum(abs(x[-5]-x[5]))/8)
+tri_3 <- terra::focal(x, w=f_3, fun=function(x, ...) sum(abs(x[-5]-x[5]))/8)
+tri_5 <- terra::focal(x, w=f_5, fun=function(x, ...) sum(abs(x[-5]-x[5]))/8)
+tri_15 <- terra::focal(x, w=f_15, fun=function(x, ...) sum(abs(x[-5]-x[5]))/8)
 
-tri_stack <- c(tr_3, tr_5, tr_15)
+tri_stack <- c(tri_3, tri_5, tri_15)
 
 #set their names
 names(tri_stack) <- c("tri_3", "tri_5", "tri_15")
 
+writeRaster(tri_stack, "data/tri_stack.tif")
 
 #repeat for TPI
 tpi_3 <- terra::focal(x, w=f_3, fun=function(x, ...) x[5] - mean(x[-5]))
 tpi_5 <- terra::focal(x, w=f_5, fun=function(x, ...) x[5] - mean(x[-5]))
 
-tpi_stack <- c(tpi_3, tpi_5, tpi_15)
+tpi_stack <- c(tpi_3, tpi_5)
 #set their names
-names(tpi_stack) <- c("tpi_3", "tpi_5", "tpi_5")
+names(tpi_stack) <- c("tpi_3", "tpi_5")
 
+writeRaster(tpi_stack, "data/tpi_stack.tif")
 
 #Terrain roughness
 rough_3 <- terra::focal(x, w=f_3, fun=function(x, ...) max(x) - min(x), na.rm=TRUE)
@@ -49,12 +52,14 @@ r_stack <- c(rough_3, rough_5, rough_15)
 #set their names
 names(r_stack) <- c("rough_3", "rough_5", "rough_15")
 
+writeRaster(r_stack, "data/r_stack.tif")
+
 #Calculate slope and aspect 
 slope <-  terrain(x = dem, v = "slope", neighbors = 8)
 aspect <- terrain(x = dem, v = "aspect", neighbors = 8)
 
 #import one of the other rasters as a template for reprojection (utm37n, 30m resolution)
-y <- rast("data/dist_lakes.tif")
+y <- rast("data/dist_rivers.tif")
 
 rasterlist <- list(tpi_stack, tri_stack, r_stack, dem, slope, aspect)
 names(rasterlist) <- c("tpi_stack", "tri_stack", "r_stack", "dem", "slope", "aspect")
@@ -71,4 +76,3 @@ cropped_rasts <- lapply(utm37n_rasterlist, function (x) crop(x, study_area, mask
 lapply(cropped_rasts, function (x) writeRaster(x, filename=paste0("data/",names(x), ".tif")))
 
 
-#, overwrite=TRUE

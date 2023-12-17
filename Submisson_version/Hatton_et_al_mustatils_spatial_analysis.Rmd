@@ -7,41 +7,29 @@ output: html_document
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
-install.packages(c("tidyverse", "raster", "sf","maptools", "terra", "tmap", "spatstat", "stars"))
+install.packages(c("tidyverse", "raster", "sf","maptools", "tmap", "spatstat", "stars"))
+install.packages('terra', repos='https://rspatial.r-universe.dev')
 library(tidyverse)
 library(raster)
 library(sf)
-library(maptools)
+#library(maptools)
 library(terra)
 library(tmap)
 library(spatstat)
 library(stars)
 ```
 
-Run the "DEM_derivitives.R" script to calculate a bunch of landform classifications
-Warning - This will take a while to run!
+I have included all the files in the data folder, but the following script calculates TPI, TRI, Roughness, Slope and Aspect.
+Run the "DEM_derivitives.R" script below to calculate the landform classification from the DEM.
+Warning - This will take a while to run! So you can just use the provided files if you prefer.
 ```{r, include=FALSE}
 sys.source("DEM_derivitives.R", envir = knitr::knit_global())
-
-tpi_stack <- raster::brick("data/tpi_stack.tif")
-tri_stack <- raster::brick("data/tri_stack.tif")
-roughness_stack <- raster::brick("data/roughness_stack.tif")
-#Read in the created data:
-slope <- raster("data/slope.tif")
-aspect <- raster("data/aspect.tif")
 ```
 
 Import the data
 ```{r}
 #read in vector data
-rastlist <- list.files(path = "data", pattern='.tif$', all.files= T, full.names= T)
-rastlist <- rastlist[-2]
-rasts <- lapply(rastlist, rast)
-names(rasts)
-rasts$aspect
-rasters <- terra::rast(rastlist)
-rasts[[1]]
-rastlist[2]
+
 mustatils <- st_read("data/mustatils.gpkg")
 study_area <- st_read("data/study_area.gpkg")
 dem <- raster("data/dem.tif")
@@ -55,21 +43,19 @@ dist_non_quart_geo <- raster("data/dist_non_quart_geo.tif")
 viewshed <- raster("data/t_vshed_whole_scaled.tif")
 dist_pekel_water <- raster("data/dist_pekel_mask.tif")
 names(dist_pekel_water) <- "dist_pekel_water"
+
+tpi_stack <- raster::brick("data/tpi_stack.tif")
+tri_stack <- raster::brick("data/tri_stack.tif")
+roughness_stack <- raster::brick("data/roughness_stack.tif")
+#Read in the created data:
+slope <- raster("data/slope.tif")
+aspect <- raster("data/aspect.tif")
 ```
 Aspect seems like an important variable, but from looking at the data it seems that many mustatils face east. Decided to separate aspect out into eastness and northness to better isolate that relationship
 ```{r}
-northness <- cos(aspect * pi / 180)
-names(northness) <- "northness"
 eastness <- sin(aspect * pi / 180)
 names(eastness) <- "eastness"
 ```
-
-Run the other script to create some other layers derived from DEM
-```{r}
-
-```
-
-
 
 ```{r}
 #list of variables with good predictive power
@@ -79,7 +65,7 @@ r = list(slope,tpi_stack$tpi_3,tpi_stack$tpi_5, tri_stack$tri_3,
          dem,dist_rivers,dist_sandstone_geo,dist_non_quart_geo,
          viewshed, eastness, dist_pekel_water)
 
-rr <- lapply(r, rast)
+rr <- terra::c(eastness, rasts)
 #get the extent of the first raster in the list
 r1 <- rast(res=30, ext = ext(rr[[1]]))
 
@@ -93,20 +79,17 @@ for (i in 1:length(rr)){
   rs[[i]] <- terra::resample(rr[[i]], standard, method='bilinear')
 }
 
-#convert back to raster (from spatraster)
-rf<- lapply(rs, raster)
 #covariates as rasters
-covariates_rs <- stack(rf)
-
-#finally get covariates stack as spatrasters
-covariates <- rast(rs)
+covariates <- rs
 
 #check to see they've kept their names
 plot(covariates[[16]])
 
+#get the centroid of each mustatil
+m_points_c <- st_centroid(mustatils)
+#extract the raster values at mustatils
 m_environ_data <- data.frame(raster::extract(covariates,m_points_c))
 ```
-
 
 # Point Process Model (PPM)
 
@@ -114,7 +97,6 @@ m_environ_data <- data.frame(raster::extract(covariates,m_points_c))
 ```{r}
 library(spatstat)
 #Generate points from mustatil centroid
-m_points_c <- st_centroid(mustatils)
 coords <- as.data.frame(st_coordinates(m_points_c))
 m_owin <- as.owin(study_area)
 sppp <- ppp(x=coords$X, y=coords$Y, window=m_owin)
@@ -140,7 +122,7 @@ plot(e_kde)
 l_kde <- density.ppp(sppp, sigma = 15000)
 plot(l_kde)
 
-pdf("plots/kde_final.pdf", width=12, height=3)
+pdf("plots/kde.pdf", width=12, height=3)
 par(mfrow = c(1,3))
 
 plot(s_kde,  main="sigma=2km")
@@ -186,7 +168,6 @@ variables that have predictive power - will check for collinearity afterwards us
 - dist_pekel_water
 
 ```{r}
-covariates
 #create an empty list
 im_stack <- list()
 #convert them all in a for loop 
@@ -194,6 +175,7 @@ for (i in 1:length(rs)){
   im_stack[[i]] <- as.im(as(raster(rs[[i]]), "SpatialGridDataFrame"))
 }
 
+#Check the names
 names(im_stack)
 #name the items in the list so we know for later
 names(im_stack) <- c("slope_im", "tpi_3_im", "tpi_5_im",
