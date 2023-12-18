@@ -7,7 +7,7 @@ output: html_document
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
-install.packages(c("tidyverse", "raster", "sf","maptools", "tmap", "spatstat", "stars"))
+install.packages(c("tidyverse", "raster", "sf","maptools", "tmap", "spatstat", "stars", "terra"))
 install.packages('terra', repos='https://rspatial.r-universe.dev')
 library(tidyverse)
 library(raster)
@@ -32,24 +32,24 @@ Import the data
 
 mustatils <- st_read("data/mustatils.gpkg")
 study_area <- st_read("data/study_area.gpkg")
-dem <- raster("data/dem.tif")
-dist_lakes <- raster("data/dist_lakes.tif")
-dist_rivers <- raster("data/dist_rivers.tif")
-dist_deposits <- raster("data/dist_deposits.tif")
-dist_lakes_rivers <- raster("data/dist_lakes_rivers.tif")
-dist_deposits_rivers <- raster("data/dist_deposits_rivers.tif")
-dist_sandstone_geo <- raster("data/dist_sandstone_geo.tif")
-dist_non_quart_geo <- raster("data/dist_non_quart_geo.tif")
-viewshed <- raster("data/t_vshed_whole_scaled.tif")
-dist_pekel_water <- raster("data/dist_pekel_mask.tif")
+dem <- rast("data/dem.tif")
+dist_rivers <- rast("data/dist_rivers.tif")
+dist_sandstone_geo <- rast("data/dist_sandstone_geo.tif")
+dist_non_quart_geo <- rast("data/dist_non_quart_geo.tif")
+viewshed <- rast("data/t_vshed_whole_scaled.tif")
+dist_pekel_water <- rast("data/dist_pekel_mask.tif")
 names(dist_pekel_water) <- "dist_pekel_water"
-
-tpi_stack <- raster::brick("data/tpi_stack.tif")
-tri_stack <- raster::brick("data/tri_stack.tif")
-roughness_stack <- raster::brick("data/roughness_stack.tif")
+tpi_3 <- rast("data/tpi_3.tif")
+tpi_5 <- rast("data/tpi_5.tif")
+tri_3 <- rast("data/tri_3.tif")
+tri_5 <- rast("data/tri_5.tif")
+tri_15 <- rast("data/tri_15.tif")
+rough_3 <- rast("data/rough_3.tif")
+rough_5 <- rast("data/rough_5.tif")
+rough_15 <- rast("data/rough_15.tif")
 #Read in the created data:
-slope <- raster("data/slope.tif")
-aspect <- raster("data/aspect.tif")
+slope <- rast("data/slope.tif")
+aspect <- rast("data/aspect.tif")
 ```
 Aspect seems like an important variable, but from looking at the data it seems that many mustatils face east. Decided to separate aspect out into eastness and northness to better isolate that relationship
 ```{r}
@@ -59,15 +59,15 @@ names(eastness) <- "eastness"
 
 ```{r}
 #list of variables with good predictive power
-r = list(slope,tpi_stack$tpi_3,tpi_stack$tpi_5, tri_stack$tri_3, 
-         tri_stack$tri_5, tri_stack$tri_15,roughness_stack$rough_3, 
-         roughness_stack$rough_5, roughness_stack$rough_15, 
-         dem,dist_rivers,dist_sandstone_geo,dist_non_quart_geo,
-         viewshed, eastness, dist_pekel_water)
+r = list(slope,tpi_3,tpi_5, tri_3, 
+         tri_5, tri_15,rough_3, 
+         rough_5, rough_15, 
+         dem,dist_rivers,dist_sandstone_geo,
+         dist_non_quart_geo,viewshed,
+         eastness, dist_pekel_water)
 
-rr <- terra::c(eastness, rasts)
 #get the extent of the first raster in the list
-r1 <- rast(res=30, ext = ext(rr[[1]]))
+r1 <- rast(res=30, ext = ext(r[[1]]))
 
 #rename the variable
 standard <- r1
@@ -75,20 +75,24 @@ standard <- r1
 rs <- list(r1)
 
 #iterate over the rasters and resample to make sure they have the same extent
-for (i in 1:length(rr)){
-  rs[[i]] <- terra::resample(rr[[i]], standard, method='bilinear')
+for (i in 1:length(r)){
+  rs[[i]] <- terra::resample(r[[i]], standard, method='bilinear')
 }
 
-#covariates as rasters
-covariates <- rs
-
+#convert from list to a raster stack
+covariates <- rast(rs)
 #check to see they've kept their names
-plot(covariates[[16]])
+(covariates[[16]])
+
+
 
 #get the centroid of each mustatil
 m_points_c <- st_centroid(mustatils)
+
+##check if this is necessae=ry still
+
 #extract the raster values at mustatils
-m_environ_data <- data.frame(raster::extract(covariates,m_points_c))
+m_environ_data <- data.frame(terra::extract(covariates,m_points_c))
 ```
 
 # Point Process Model (PPM)
@@ -149,24 +153,7 @@ plot(pcf_1)
 #### Convert to im stack
 Convert all of the useful variables into im's and create a stack - look at rhohat plots for each and export them 
 
-variables that have predictive power - will check for collinearity afterwards using VIF
-- slope,
-- tpi_stack$tpi_3 
-- tpi_stack$tpi_5, 
-- tri_stack$tri_3, 
-- tri_stack$tri_5, 
-- tri_stack$tri_15,
-- roughness_stack$rough_3, 
-- roughness_stack$rough_5, 
-- roughness_stack$rough_15, 
-- dem,
-- dist_rivers,
-- dist_sandstone_geo,
-- dist_non_quart_geo,
-- viewshed, 
-- eastness, 
-- dist_pekel_water
-
+Then check for collinearity afterwards using VIF
 ```{r}
 #create an empty list
 im_stack <- list()
@@ -187,13 +174,10 @@ names(im_stack) <- c("slope_im", "tpi_3_im", "tpi_5_im",
 
 #check renaming worked
 im_stack
-
-c_trend <- ~slope_im + tpi_3_im + tpi_5_im + tri_3_im + tri_5_im + tri_15_im + rough_3_im + rough_5_im + rough_15_im +dem_im + dist_rivers_im + dist_sandstone_geo_im + dist_non_quart_geo_im + viewshed_im + eastness_im + pekel_im
 ```
 
 Create Rhohat plots for each of the variables to see their effect on mustatil location again
 
-automatically for all seems to work but plots are a bit weird - can work on it later doing it manually for now.
 ```{r rhohat automated, eval=FALSE}
 rhohat_list <- list()
 for (i in 1:length(im_stack)){
@@ -255,8 +239,8 @@ plot(eastness, main="Eastness", col=pal(10), axes=FALSE, box=FALSE, legend.args=
 plot(rhohat_list[[11]], main = "Distance to palaeorivers",xlim=c(0,25000), legend=FALSE)
 plot(dist_rivers, main="Distance to palaeorivers", col=plasma(20), axes=FALSE, box=FALSE, legend.args=list(text="",side=2))
 
-plot(rhohat_list[[16]], main = "Distance to recent water occurence",xlim=c(0, 30000), legend=FALSE)
-plot(dist_pekel_water, main="Distance to recent water occurence", col=plasma(20), axes=FALSE, box=FALSE, legend.args=list(text="",side=2))
+plot(rhohat_list[[16]], main = "Distance to recent water accumulation",xlim=c(0, 30000), legend=FALSE)
+plot(dist_pekel_water, main="Distance to recent water accumulation", col=plasma(20), axes=FALSE, box=FALSE, legend.args=list(text="",side=2))
 
 plot(rhohat_list[[12]], main = "Distance to sandstone outcrops",xlim=c(0,35000), legend=FALSE)
 plot(dist_sandstone_geo, main="Distance to sandstone outcrops", col=plasma(20), axes=FALSE, box=FALSE, legend.args=list(text="",side=2))
@@ -268,6 +252,7 @@ dev.off()
 
 #Point process model
 ```{r}
+
 #null model
 mod0 <- ppm(sppp, ~1)
 pcf_null <- envelope(mod0, fun=pcfinhom, correction="iso", nsim=999)
@@ -277,6 +262,8 @@ plot(pcf_null, legend=FALSE, main="CSR model")
 dev.off()
 
 #first order
+c_trend <- ~slope_im + tpi_3_im + tpi_5_im + tri_3_im + tri_5_im + tri_15_im + rough_3_im + rough_5_im + rough_15_im +dem_im + dist_rivers_im + dist_sandstone_geo_im + dist_non_quart_geo_im + viewshed_im + eastness_im + pekel_im
+
 
 #Do a normal model first - check the collinearity and then chuck out some variables and use a step procedure
 #ppm_mod1 <- step(ppm(sppp, trend=c_trend, covariates = im_stack , correction="iso", method = "logi"))
@@ -292,7 +279,7 @@ vif_values <- car::vif(g)
 #largest value
 max(vif_values)
 #name of largest value variable
-which.max(vif_values)
+vif_max<- which.max(vif_values)
 
 #remove slope
 c_trend <- ~tpi_3_im + tpi_5_im + tri_5_im + tri_15_im + rough_3_im + rough_5_im + rough_15_im +dem_im + dist_rivers_im + dist_sandstone_geo_im + dist_non_quart_geo_im + viewshed_im + eastness_im + pekel_im
@@ -347,15 +334,65 @@ which.max(vif_values)
 #test a for loop:
 
 
+
 ###All remaining variables have VIF < 5 so we can make a step ppm model now###
 
 ppm_mod1 <- step(ppm(sppp, trend=c_trend, covariates = im_stack , correction="iso", method = "logi"))
-pcf_mod1 <- envelope(ppm_mod1, fun=pcfinhom, correction="iso", nsim=1999)
+pcf_mod1 <- envelope(ppm_mod1, fun=pcfinhom, correction="iso", nsim=999)
 summary(ppm_mod1)
 
 pdf(width=9, height=7, file = "plots/analysis_redo/pcf_first_order_zoomed_999sim.pdf")
 plot(pcf_mod1,xlim=c(0,10000), ylim=c(0,100), legend=FALSE, main="First-order model")
 dev.off()
+
+```
+
+```{r}
+#c_trend <- c(slope_im, tpi_3_im, tpi_5_im, tri_3_im, tri_5_im, tri_15_im, 
+    rough_3_im, rough_5_im, rough_15_im , dem_im , dist_rivers_im , 
+    dist_sandstone_geo_im , dist_non_quart_geo_im , viewshed_im , 
+    eastness_im , pekel_im)
+vif_check(c_trend, threshold = 5, sppp, im_stack)
+# Function to check and remove variables with high VIF
+vif_check <- function(c_trend, threshold = 5, sppp, im_stack) {
+  # Get the names of variables
+  names <- names(c_trend)
+  
+  # Initialize a flag to check for high VIF
+  high_vif <- TRUE
+  
+  while (high_vif) {
+    # Fit a linear model and calculate VIF
+    model <- ppm(sppp, trend=c_trend, covariates = im_stack , correction="iso", method = "logi")
+    g <- getglmfit(model)
+    vif_values <- car::vif(g)
+    
+    # Find the variable with the highest VIF
+    max_vif_index <- which.max(vif_values)
+    max_vif <- vif_values[max_vif_index]
+    
+    # Check if the maximum VIF exceeds the threshold
+    if (max_vif > threshold) {
+      # Remove the variable with the highest VIF
+      removed_variable <- c_trend[max_vif_index]
+      c("Removing variable:", removed_variable, "with VIF:", max_vif, "\n")
+      c_trend <- c_trend[, -max_vif_index, drop = FALSE]
+    } else {
+      # If no variable exceeds the threshold, set the flag to FALSE to exit the loop
+      high_vif <- FALSE
+      c("No variable with VIF exceeding the threshold.\n")
+    }
+  }
+  
+  return(data)
+}
+
+# Example usage:
+# Assuming 'your_data' is your data frame with predictor variables
+# your_data <- ... 
+
+# Call the function with your data
+data_after_vif_removal <- check_and_remove_high_vif(your_data, threshold = 5)
 
 ```
 
