@@ -262,8 +262,10 @@ plot(pcf_null, legend=FALSE, main="CSR model")
 dev.off()
 
 #first order
-c_trend <- ~slope_im + tpi_3_im + tpi_5_im + tri_3_im + tri_5_im + tri_15_im + rough_3_im + rough_5_im + rough_15_im +dem_im + dist_rivers_im + dist_sandstone_geo_im + dist_non_quart_geo_im + viewshed_im + eastness_im + pekel_im
+c_trend <- slope_im + tpi_3_im + tpi_5_im + tri_3_im + tri_5_im + tri_15_im + rough_3_im + rough_5_im + rough_15_im +dem_im + dist_rivers_im + dist_sandstone_geo_im + dist_non_quart_geo_im + viewshed_im + eastness_im + pekel_im
+im_stack[1]
 
+c_trend <- c(im_stack[1] , im_stack[2] , im_stack[3] ,im_stack[4] ,im_stack[5] ,im_stack[6] , im_stack[7] ,im_stack[8] ,im_stack[9] , im_stack[10] , im_stack[11] ,im_stack[12] ,im_stack[13] , im_stack[14] , im_stack[15] , im_stack[16]) 
 
 #Do a normal model first - check the collinearity and then chuck out some variables and use a step procedure
 #ppm_mod1 <- step(ppm(sppp, trend=c_trend, covariates = im_stack , correction="iso", method = "logi"))
@@ -347,52 +349,7 @@ dev.off()
 
 ```
 
-```{r}
-#c_trend <- c(slope_im, tpi_3_im, tpi_5_im, tri_3_im, tri_5_im, tri_15_im, 
-    rough_3_im, rough_5_im, rough_15_im , dem_im , dist_rivers_im , 
-    dist_sandstone_geo_im , dist_non_quart_geo_im , viewshed_im , 
-    eastness_im , pekel_im)
-vif_check(c_trend, threshold = 5, sppp, im_stack)
-# Function to check and remove variables with high VIF
-vif_check <- function(c_trend, threshold = 5, sppp, im_stack) {
-  # Get the names of variables
-  names <- names(c_trend)
-  
-  # Initialize a flag to check for high VIF
-  high_vif <- TRUE
-  
-  while (high_vif) {
-    # Fit a linear model and calculate VIF
-    model <- ppm(sppp, trend=c_trend, covariates = im_stack , correction="iso", method = "logi")
-    g <- getglmfit(model)
-    vif_values <- car::vif(g)
-    
-    # Find the variable with the highest VIF
-    max_vif_index <- which.max(vif_values)
-    max_vif <- vif_values[max_vif_index]
-    
-    # Check if the maximum VIF exceeds the threshold
-    if (max_vif > threshold) {
-      # Remove the variable with the highest VIF
-      removed_variable <- c_trend[max_vif_index]
-      c("Removing variable:", removed_variable, "with VIF:", max_vif, "\n")
-      c_trend <- c_trend[, -max_vif_index, drop = FALSE]
-    } else {
-      # If no variable exceeds the threshold, set the flag to FALSE to exit the loop
-      high_vif <- FALSE
-      c("No variable with VIF exceeding the threshold.\n")
-    }
-  }
-  
-  return(data)
-}
 
-# Example usage:
-# Assuming 'your_data' is your data frame with predictor variables
-# your_data <- ... 
-
-# Call the function with your data
-data_after_vif_removal <- check_and_remove_high_vif(your_data, threshold = 5)
 
 ```
 
